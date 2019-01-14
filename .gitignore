@@ -1,3 +1,10 @@
+.sdsl
+.htslib
+bin/
+src/dicey
+src/sdslLite/
+*~
+
 # Prerequisites
 *.d
 
