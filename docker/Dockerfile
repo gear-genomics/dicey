@@ -1,5 +1,5 @@
 # use the ubuntu base image
-FROM ubuntu:16.04
+FROM ubuntu:14.04
 
 MAINTAINER Tobias Rausch rausch@embl.de
 
