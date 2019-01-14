@@ -1,5 +1,7 @@
 # Dicey travis.yml
 
+dist: xenial
+
 language: cpp
 
 matrix:
