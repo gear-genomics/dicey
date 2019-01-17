@@ -51,6 +51,16 @@ namespace dicey
     return seqlen.size();
   }
 
+  inline std::string
+  replaceNonDna(std::string const& str) {
+    std::string out;
+    for(uint32_t i = 0; i<str.size();++i) {
+      if ((str[i] == 'A') || (str[i] == 'C') || (str[i] == 'G') || (str[i] == 'T')) out = out.append(str, i, 1);
+      else out = out.append("N");
+    }
+    return out;
+  }
+
 
 }
 

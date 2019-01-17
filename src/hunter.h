@@ -43,6 +43,7 @@ Contact: Tobias Rausch (rausch@embl.de)
 #include <boost/filesystem.hpp>
 #include <boost/progress.hpp>
 
+#include "neighbors.h"
 #include "util.h"
 
 using namespace sdsl;
@@ -100,6 +101,10 @@ namespace dicey
     if (!vm.count("hamming")) c.indel = true;
     else c.indel = false;
 
+    // Upper case
+    c.sequence = boost::to_upper_copy(c.sequence);
+    c.sequence = replaceNonDna(c.sequence);
+
     // Set prefix and suffix based on edit distance
     c.pre_context = 2;
     c.post_context = 2;
@@ -133,6 +138,18 @@ namespace dicey
       std::cerr << "Index cannot be loaded!" << std::endl;
       return 1;
     }
+
+    // Define alphabet
+    typedef std::set<char> TAlphabet;
+    char tmp[] = {'A', 'C', 'G', 'T'};
+    TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
+
+    // Generate neighbors
+    typedef std::set<std::string> TStringSet;
+    TStringSet fwdset;
+    neighbors(c.sequence, alphabet, c.distance, c.indel, fwdset);
+    // Debug
+    for(TStringSet::iterator it = fwdset.begin(); it != fwdset.end(); ++it) std::cerr << *it << std::endl;
     
     return 0;
   }
