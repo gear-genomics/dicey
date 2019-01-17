@@ -57,6 +57,7 @@ namespace dicey
     uint32_t distance;
     std::size_t pre_context;
     std::size_t post_context;
+    std::size_t max_locations;
     std::string sequence;
     boost::filesystem::path genome;
     boost::filesystem::path outfile;
@@ -71,6 +72,7 @@ namespace dicey
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
       ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("hits.json.gz"), "output file")
+      ("maxmatches,m", boost::program_options::value<std::size_t>(&c.max_locations)->default_value(1000), "max. number of matches")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
       ("forward,f", "only forward matches")
@@ -113,8 +115,8 @@ namespace dicey
     if (c.distance >= c.sequence.size()) c.distance = c.sequence.size() - 1;
 
     // Set prefix and suffix based on edit distance
-    c.pre_context = 2;
-    c.post_context = 2;
+    c.pre_context = 0;
+    c.post_context = 0;
     if (c.indel) {
       c.pre_context += c.distance;
       c.post_context += c.distance;
@@ -129,7 +131,8 @@ namespace dicey
 
     // Parse chromosome lengths
     std::vector<uint32_t> seqlen;
-    uint32_t nseq = getSeqLen(c, seqlen);
+    std::vector<std::string> seqname;
+    uint32_t nseq = getSeqLenName(c, seqlen, seqname);
     if (!nseq) {
       std::cerr << "Could not retrieve sequence lengths!" << std::endl;
       return 1;
@@ -170,6 +173,49 @@ namespace dicey
       reverseComplement(rev);
       neighbors(rev, alphabet, c.distance, c.indel, fwrv[1]);
       std::cout << "(#n=" << fwrv[1].size() << ")" << std::endl;
+    }
+
+    // Search
+    uint32_t hits = 0;
+    for(uint32_t i = 0; i < fwrv.size(); ++i) {
+      for(typename TStringSet::const_iterator it = fwrv[i].begin(); ((it != fwrv[i].end()) && (hits < c.max_locations)); ++it) {
+	std::string query = *it;
+	std::size_t m = query.size();
+	std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+	if (occs > 0) {
+	  auto locations = locate(fm_index, query.begin(), query.begin() + m);
+	  std::sort(locations.begin(), locations.end());
+	  std::size_t pre_extract = c.pre_context;
+	  std::size_t post_extract = c.post_context;
+	  for(std::size_t i = 0; ((i < std::min(occs, c.max_locations)) && (hits < c.max_locations)); ++i) {
+	    ++hits;
+	    int64_t bestPos = locations[i];
+	    int64_t cumsum = 0;
+	    uint32_t refIndex = 0;
+	    for(; bestPos >= cumsum + seqlen[refIndex]; ++refIndex) cumsum += seqlen[refIndex];
+	    uint32_t chrpos = bestPos - cumsum;
+	    if (pre_extract > locations[i]) {
+	      pre_extract = locations[i];
+	    }
+	    if (locations[i]+m+post_extract > fm_index.size()) {
+	      post_extract = fm_index.size() - locations[i] - m;
+	    }
+	    auto s = extract(fm_index, locations[i]-pre_extract, locations[i]+m+post_extract-1);
+	    std::string pre = s.substr(0, pre_extract);
+	    s = s.substr(pre_extract);
+	    if (pre.find_last_of('\n') != std::string::npos) {
+	      pre = pre.substr(pre.find_last_of('\n')+1);
+	    }
+	    std::string post = s.substr(m);
+	    post = post.substr(0, post.find_first_of('\n'));
+	    std::string genomicseq = pre + s.substr(0, m) + post;
+	    std::cout << seqname[refIndex] << ":" << chrpos+1 << "-" << chrpos+query.size() << std::endl;
+	    std::cout << genomicseq << std::endl;
+	    std::cout << c.sequence << std::endl;
+	    std::cout << "--" << std::endl;
+	  }
+	}
+      }
     }
     
     return 0;

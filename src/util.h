@@ -30,7 +30,7 @@ namespace dicey
 
   template<typename TConfig>
   inline int32_t
-  getSeqLen(TConfig const& c, std::vector<uint32_t>& seqlen) {
+  getSeqLenName(TConfig const& c, std::vector<uint32_t>& seqlen, std::vector<std::string>& seqname) {
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
       std::cerr << "Input reference file is missing: " << c.genome.string() << std::endl;
       return 0;
@@ -43,9 +43,11 @@ namespace dicey
       } else fai = fai_load(c.genome.string().c_str());
     }
     seqlen.resize(faidx_nseq(fai));
+    seqname.resize(faidx_nseq(fai), "");
     for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
-      std::string seqname(faidx_iseq(fai, refIndex));
-      seqlen[refIndex] = faidx_seq_len(fai, seqname.c_str()) + 1;
+      std::string sqn(faidx_iseq(fai, refIndex));
+      seqlen[refIndex] = faidx_seq_len(fai, sqn.c_str()) + 1;
+      seqname[refIndex] = sqn;
     }
     if (fai != NULL) fai_destroy(fai);
     return seqlen.size();

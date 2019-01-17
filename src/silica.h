@@ -251,7 +251,8 @@ namespace dicey
     
     // Parse chromosome lengths
     std::vector<uint32_t> seqlen;
-    uint32_t nseq = getSeqLen(c, seqlen);
+    std::vector<std::string> seqname;
+    uint32_t nseq = getSeqLenName(c, seqlen, seqname);
     if (!nseq) {
       std::cerr << "Could not retrieve sequence lengths!" << std::endl;
       return 1;
