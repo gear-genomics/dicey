@@ -57,7 +57,7 @@ using namespace sdsl;
 namespace dicey
 {
 
-  struct Config {
+  struct SilicaConfig {
     bool indel;
     bool pruneprimer;
     double cutTemp;
@@ -133,11 +133,11 @@ namespace dicey
   
   
   int silica(int argc, char** argv) {
-    Config c;
+    SilicaConfig c;
     
     // Initialize thal arguments
     boost::filesystem::path exepath = boost::filesystem::system_complete(argv[0]).parent_path();
-    std::string cfgpath = exepath.string() + "/../src/primer3_config/";
+    std::string cfgpath = exepath.string() + "/src/primer3_config/";
     primer3thal::thal_args a;
     primer3thal::set_thal_default_args(&a);
     a.temponly=1;
@@ -200,7 +200,7 @@ namespace dicey
 
     // Check command line arguments
     if ((vm.count("help")) || (!vm.count("input-file")) || (!vm.count("genome"))) {
-      std::cout << "Usage: " << argv[0] << " [OPTIONS] -g <ref.fa.gz> sequences.fasta" << std::endl;
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> sequences.fasta" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
@@ -225,6 +225,7 @@ namespace dicey
     // Show cmd
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] ";
+    std::cout << "dicey ";
     for(int i=0; i<argc; ++i) { std::cout << argv[i] << ' '; }
     std::cout << std::endl;
     

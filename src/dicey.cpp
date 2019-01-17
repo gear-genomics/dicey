@@ -31,10 +31,10 @@ Contact: Tobias Rausch (rausch@embl.de)
 #endif
 
 #include "version.h"
+#include "index.h"
 #include "silica.h"
 
 using namespace dicey;
-
 
 inline void
 displayUsage() {
@@ -73,8 +73,7 @@ int main(int argc, char **argv) {
     return 0;
   }
   else if ((std::string(argv[1]) == "index")) {
-    return 0;
-    //return index(argc-1,argv+1);
+    return index(argc-1,argv+1);
   }
   else if ((std::string(argv[1]) == "search")) {
     return silica(argc-1,argv+1);
