@@ -51,6 +51,7 @@ Contact: Tobias Rausch (rausch@embl.de)
 #include "needle.h"
 #include "thal.h"
 #include "json.h"
+#include "util.h"
 
 using namespace sdsl;
 
@@ -250,22 +251,14 @@ namespace dicey
     
     // Parse chromosome lengths
     std::vector<uint32_t> seqlen;
-    if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
-      std::cerr << "Input reference file is missing: " << c.genome.string() << std::endl;
+    uint32_t nseq = getSeqLen(c, seqlen);
+    if (!nseq) {
+      std::cerr << "Could not retrieve sequence lengths!" << std::endl;
       return 1;
     }
+
+    // Open fasta index
     faidx_t* fai = fai_load(c.genome.string().c_str());
-    if (fai == NULL) {
-      if (fai_build(c.genome.string().c_str()) == -1) {
-	std::cerr << "Fail to open genome fai index for " << c.genome.string() << std::endl;
-	return 1;
-      } else fai = fai_load(c.genome.string().c_str());
-    }
-    seqlen.resize(faidx_nseq(fai));
-    for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
-      std::string seqname(faidx_iseq(fai, refIndex));
-      seqlen[refIndex] = faidx_seq_len(fai, seqname.c_str()) + 1;
-    }
   
     // Reference index
     csa_wt<> fm_index;  

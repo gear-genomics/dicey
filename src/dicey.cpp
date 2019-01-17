@@ -32,6 +32,7 @@ Contact: Tobias Rausch (rausch@embl.de)
 
 #include "version.h"
 #include "index.h"
+#include "hunter.h"
 #include "silica.h"
 
 using namespace dicey;
@@ -43,6 +44,7 @@ displayUsage() {
   std::cout << "Commands:" << std::endl;
   std::cout << std::endl;
   std::cout << "    index        index FASTA reference file" << std::endl;
+  std::cout << "    hunt         search DNA sequences" << std::endl;
   std::cout << "    search       in-silico PCR" << std::endl;
   std::cout << std::endl;
   std::cout << std::endl;
@@ -74,6 +76,9 @@ int main(int argc, char **argv) {
   }
   else if ((std::string(argv[1]) == "index")) {
     return index(argc-1,argv+1);
+  }
+  else if ((std::string(argv[1]) == "hunt")) {
+    return hunter(argc-1,argv+1);
   }
   else if ((std::string(argv[1]) == "search")) {
     return silica(argc-1,argv+1);
