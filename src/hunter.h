@@ -58,8 +58,6 @@ namespace dicey
     bool indel;
     bool reverse;
     uint32_t distance;
-    std::size_t pre_context;
-    std::size_t post_context;
     std::size_t max_locations;
     std::string sequence;
     boost::filesystem::path genome;
@@ -119,10 +117,6 @@ namespace dicey
     
     // Check distance
     if (c.distance >= c.sequence.size()) c.distance = c.sequence.size() - 1;
-
-    // Set prefix and suffix based on edit distance
-    c.pre_context = 0;
-    c.post_context = 0;
 
     // Show cmd
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
@@ -193,31 +187,16 @@ namespace dicey
 	if (occs > 0) {
 	  auto locations = locate(fm_index, query.begin(), query.begin() + m);
 	  std::sort(locations.begin(), locations.end());
-	  std::size_t pre_extract = c.pre_context;
-	  std::size_t post_extract = c.post_context;
 	  for(std::size_t i = 0; ((i < std::min(occs, c.max_locations)) && (hits < c.max_locations)); ++i) {
 	    int64_t bestPos = locations[i];
 	    int64_t cumsum = 0;
 	    uint32_t refIndex = 0;
 	    for(; bestPos >= cumsum + seqlen[refIndex]; ++refIndex) cumsum += seqlen[refIndex];
 	    uint32_t chrpos = bestPos - cumsum;
-	    if (pre_extract > locations[i]) {
-	      pre_extract = locations[i];
-	    }
-	    if (locations[i]+m+post_extract > fm_index.size()) {
-	      post_extract = fm_index.size() - locations[i] - m;
-	    }
-	    auto s = extract(fm_index, locations[i]-pre_extract, locations[i]+m+post_extract-1);
-	    std::string pre = s.substr(0, pre_extract);
-	    s = s.substr(pre_extract);
-	    if (pre.find_last_of('\n') != std::string::npos) {
-	      pre = pre.substr(pre.find_last_of('\n')+1);
-	    }
-	    std::string post = s.substr(m);
-	    post = post.substr(0, post.find_first_of('\n'));
+	    auto s = extract(fm_index, locations[i], locations[i] + m -1);
 
 	    // Create json record
-	    std::string genomicseq = pre + s.substr(0, m) + post;
+	    std::string genomicseq = s.substr(0, m);
 	    std::string region = seqname[refIndex] + ":" + boost::lexical_cast<std::string>(chrpos+1) + "-" + boost::lexical_cast<std::string>(chrpos+query.size());
 	    nlohmann::json j;
 	    if (fwrvidx == 0) {
