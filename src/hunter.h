@@ -43,6 +43,8 @@ Contact: Tobias Rausch (rausch@embl.de)
 #include <boost/filesystem.hpp>
 #include <boost/progress.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include "neighbors.h"
 #include "util.h"
 
@@ -110,7 +112,10 @@ namespace dicey
     // Upper case
     c.sequence = boost::to_upper_copy(c.sequence);
     c.sequence = replaceNonDna(c.sequence);
+    std::string revSequence = c.sequence;
+    reverseComplement(revSequence);
 
+    
     // Check distance
     if (c.distance >= c.sequence.size()) c.distance = c.sequence.size() - 1;
 
@@ -169,16 +174,20 @@ namespace dicey
     if (c.reverse) {
       now = boost::posix_time::second_clock::local_time();
       std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Generate reverse sequence neighborhood " << std::flush;
-      std::string rev = c.sequence;
-      reverseComplement(rev);
-      neighbors(rev, alphabet, c.distance, c.indel, fwrv[1]);
+      neighbors(revSequence, alphabet, c.distance, c.indel, fwrv[1]);
       std::cout << "(#n=" << fwrv[1].size() << ")" << std::endl;
     }
 
+    // Output file
+    boost::iostreams::filtering_ostream rcfile;
+    rcfile.push(boost::iostreams::gzip_compressor());
+    rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+    rcfile << '[';
+    
     // Search
     uint32_t hits = 0;
-    for(uint32_t i = 0; i < fwrv.size(); ++i) {
-      for(typename TStringSet::const_iterator it = fwrv[i].begin(); ((it != fwrv[i].end()) && (hits < c.max_locations)); ++it) {
+    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
 	std::string query = *it;
 	std::size_t m = query.size();
 	std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
@@ -188,7 +197,6 @@ namespace dicey
 	  std::size_t pre_extract = c.pre_context;
 	  std::size_t post_extract = c.post_context;
 	  for(std::size_t i = 0; ((i < std::min(occs, c.max_locations)) && (hits < c.max_locations)); ++i) {
-	    ++hits;
 	    int64_t bestPos = locations[i];
 	    int64_t cumsum = 0;
 	    uint32_t refIndex = 0;
@@ -208,15 +216,29 @@ namespace dicey
 	    }
 	    std::string post = s.substr(m);
 	    post = post.substr(0, post.find_first_of('\n'));
+
+	    // Create json record
 	    std::string genomicseq = pre + s.substr(0, m) + post;
-	    std::cout << seqname[refIndex] << ":" << chrpos+1 << "-" << chrpos+query.size() << std::endl;
-	    std::cout << genomicseq << std::endl;
-	    std::cout << c.sequence << std::endl;
-	    std::cout << "--" << std::endl;
+	    std::string region = seqname[refIndex] + ":" + boost::lexical_cast<std::string>(chrpos+1) + "-" + boost::lexical_cast<std::string>(chrpos+query.size());
+	    nlohmann::json j;
+	    j["reference"] = genomicseq;
+	    if (fwrvidx == 0) {
+	      j["query"] = c.sequence;
+	      j["orientation"] = "+";
+	    } else {
+	      j["query"] = revSequence;
+	      j["orientation"] = "-";
+	    }
+	    j["region"] = region;
+	    if (hits) rcfile << ',';
+	    rcfile << j.dump();
+	    ++hits;
 	  }
 	}
       }
     }
+    rcfile << ']' << std::endl;
+    rcfile.pop();
     
     return 0;
   }
