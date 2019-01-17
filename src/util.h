@@ -56,7 +56,10 @@ namespace dicey
     std::string out;
     for(uint32_t i = 0; i<str.size();++i) {
       if ((str[i] == 'A') || (str[i] == 'C') || (str[i] == 'G') || (str[i] == 'T')) out = out.append(str, i, 1);
-      else out = out.append("N");
+      else {
+	std::cerr << "Warning: Non-DNA character detected " << str[i] << std::endl;
+	out = out.append("N");
+      }
     }
     return out;
   }

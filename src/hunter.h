@@ -53,6 +53,7 @@ namespace dicey
 
   struct HunterConfig {
     bool indel;
+    bool reverse;
     uint32_t distance;
     std::size_t pre_context;
     std::size_t post_context;
@@ -72,6 +73,7 @@ namespace dicey
       ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("hits.json.gz"), "output file")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
+      ("forward,f", "only forward matches")
        ;
     
     boost::program_options::options_description hidden("Hidden options");
@@ -100,10 +102,15 @@ namespace dicey
     // Cmd switches
     if (!vm.count("hamming")) c.indel = true;
     else c.indel = false;
+    if (!vm.count("forward")) c.reverse = true;
+    else c.reverse = false;
 
     // Upper case
     c.sequence = boost::to_upper_copy(c.sequence);
     c.sequence = replaceNonDna(c.sequence);
+
+    // Check distance
+    if (c.distance >= c.sequence.size()) c.distance = c.sequence.size() - 1;
 
     // Set prefix and suffix based on edit distance
     c.pre_context = 2;
@@ -145,11 +152,25 @@ namespace dicey
     TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
 
     // Generate neighbors
+    now = boost::posix_time::second_clock::local_time();
+    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Generate forward sequence neighborhood " << std::flush;
     typedef std::set<std::string> TStringSet;
-    TStringSet fwdset;
-    neighbors(c.sequence, alphabet, c.distance, c.indel, fwdset);
+    typedef std::vector<TStringSet> TFwdRevSearchSets;
+    TFwdRevSearchSets fwrv(2, TStringSet());
+    neighbors(c.sequence, alphabet, c.distance, c.indel, fwrv[0]);
+    std::cout << "(#n=" << fwrv[0].size() << ")" << std::endl;
     // Debug
-    for(TStringSet::iterator it = fwdset.begin(); it != fwdset.end(); ++it) std::cerr << *it << std::endl;
+    //for(TStringSet::iterator it = fwdset.begin(); it != fwdset.end(); ++it) std::cerr << *it << std::endl;
+
+    // Reverse complement set?
+    if (c.reverse) {
+      now = boost::posix_time::second_clock::local_time();
+      std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Generate reverse sequence neighborhood " << std::flush;
+      std::string rev = c.sequence;
+      reverseComplement(rev);
+      neighbors(rev, alphabet, c.distance, c.indel, fwrv[1]);
+      std::cout << "(#n=" << fwrv[1].size() << ")" << std::endl;
+    }
     
     return 0;
   }
