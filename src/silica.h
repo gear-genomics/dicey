@@ -68,10 +68,18 @@ namespace dicey
     double penLen;
     uint32_t kmer;
     uint32_t distance;
+
+    // Primer3
+    double temp;
+    double mv;
+    double dv;
+    double dna_conc;
+    double dntp;
     std::size_t pre_context;
     std::size_t post_context;
     std::size_t max_locations;
     std::string format;
+    boost::filesystem::path primer3Config;
     boost::filesystem::path outfile;
     boost::filesystem::path primfile;
     boost::filesystem::path infile;
@@ -135,20 +143,12 @@ namespace dicey
   int silica(int argc, char** argv) {
     SilicaConfig c;
     
-    // Initialize thal arguments
-    boost::filesystem::path exepath = boost::filesystem::system_complete(argv[0]).parent_path();
-    std::string cfgpath = exepath.string() + "/src/primer3_config/";
-    primer3thal::thal_args a;
-    primer3thal::set_thal_default_args(&a);
-    a.temponly=1;
-    a.type = primer3thal::thal_end1;
-    primer3thal::get_thermodynamic_values(cfgpath.c_str());
-
     // CMD Parameter
     boost::program_options::options_description generic("Generic options");
     generic.add_options()
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
+      ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("amplicons.txt"), "amplicon output file")
       ("primer,p", boost::program_options::value<boost::filesystem::path>(&c.primfile)->default_value("primers.txt"), "primer locations file")
       ("format,f", boost::program_options::value<std::string>(&c.format)->default_value("txt"), "output format (json, txt, csv or jsoncsv)")
@@ -175,11 +175,11 @@ namespace dicey
 
     boost::program_options::options_description tmcalc("Parameters for Tm Calculation");
     tmcalc.add_options()
-      ("enttemp", boost::program_options::value<double>(&a.temp)->default_value(37.0), "temperature for entropie and entalpie calculation in Celsius")
-      ("monovalent", boost::program_options::value<double>(&a.mv)->default_value(50.0), "concentration of monovalent ions in mMol")
-      ("divalent", boost::program_options::value<double>(&a.dv)->default_value(1.5), "concentration of divalent ions in mMol")
-      ("dna", boost::program_options::value<double>(&a.dna_conc)->default_value(50.0), "concentration of annealing(!) Oligos in nMol")
-      ("dntp", boost::program_options::value<double>(&a.dntp)->default_value(0.6), "the sum  of all dNTPs in mMol")
+      ("enttemp", boost::program_options::value<double>(&c.temp)->default_value(37.0), "temperature for entropie and entalpie calculation in Celsius")
+      ("monovalent", boost::program_options::value<double>(&c.mv)->default_value(50.0), "concentration of monovalent ions in mMol")
+      ("divalent", boost::program_options::value<double>(&c.dv)->default_value(1.5), "concentration of divalent ions in mMol")
+      ("dna", boost::program_options::value<double>(&c.dna_conc)->default_value(50.0), "concentration of annealing(!) Oligos in nMol")
+      ("dntp", boost::program_options::value<double>(&c.dntp)->default_value(0.6), "the sum  of all dNTPs in mMol")
       ;
     
     boost::program_options::options_description hidden("Hidden options");
@@ -211,6 +211,22 @@ namespace dicey
     if (vm.count("pruneprimer")) c.pruneprimer = true;
     else c.pruneprimer = false;
 
+    // Initialize thal arguments
+    if (!boost::filesystem::exists(c.primer3Config)) {
+      std::cerr << "Cannot find primer3 config directory: " << c.primer3Config.string() << std::endl;
+      return 1;
+    }
+    primer3thal::thal_args a;
+    primer3thal::set_thal_default_args(&a);
+    a.temponly=1;
+    a.type = primer3thal::thal_end1;
+    primer3thal::get_thermodynamic_values(c.primer3Config.string().c_str());
+    a.temp = c.temp;
+    a.mv = c.mv;
+    a.dv = c.dv;
+    a.dna_conc = c.dna_conc;
+    a.dntp = c.dntp;
+    
     // Set prefix and suffix based on edit distance
     c.pre_context = 2;
     c.post_context = 2;
