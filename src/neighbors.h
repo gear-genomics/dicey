@@ -82,38 +82,41 @@ _insert(TStrSet& strset, std::string const& s) {
 template<typename TAlphabet, typename TStringSet>
 inline void
 _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bool indel, int32_t pos, TStringSet& strset) {
-  for(int32_t i = pos; i < (int32_t) query.size();++i) {
+  if (pos < (int32_t) query.size()) {
     if (dist > 0) {
       if (indel) {
+	// Deletion
+	std::string newst = query.substr(0, pos) + query.substr(pos + 1);
+	_neighbors(newst, alphabet, dist - 1, indel, pos, strset);
+      }
+    }
+
+    // No change, move to next pos
+    _neighbors(query, alphabet, dist, indel, pos+1, strset);
+
+    if (dist > 0) {
+      // Switch nucleotide
+      for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
+	if (*ait != query[pos]) {
+	  std::string newst(query);
+	  newst[pos] = *ait;
+	  _neighbors(newst, alphabet, dist - 1, indel, pos+1, strset);
+	}
+      }
+
+      if (indel) {    
 	// Insertion
 	for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
 	  std::string ins("N");
 	  ins[0] = *ait;
-	  std::string newst = query.substr(0, i) + ins + query.substr(i);
-	  _neighbors(newst, alphabet, dist - 1, indel, pos, strset);
-	}
-	// Deletion
-	std::string newst = query.substr(0, i) + query.substr(i + 1);
-        _neighbors(newst, alphabet, dist - 1, indel, pos + 1, strset);
-      }
-      for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
-	if (*ait != query[i]) {
-	  std::string newst(query);
-	  newst[i] = *ait;
-	  _neighbors(newst, alphabet, dist - 1, indel, pos+1, strset);
+	  std::string newst = query.substr(0, pos) + ins + query.substr(pos);
+	  _neighbors(newst, alphabet, dist - 1, indel, pos + 1, strset);
 	}
       }
     }
+  } else {
+    _insert(strset, query);
   }
-  if ((indel) && (dist > 0)) {
-    for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
-      std::string ins("N");
-      ins[0] = *ait;
-      std::string newst = query + ins;
-      _insert(strset, newst);
-    }
-  }
-  _insert(strset, query);
 }
       
 
