@@ -30,6 +30,53 @@ Contact: Tobias Rausch (rausch@embl.de)
 namespace dicey
 {
 
+  template<typename TAlign1, typename TAlign2, typename TAlignConfig, typename TScoreObject>
+  inline int
+  needleScore(TAlign1 const& a1, TAlign2 const& a2, TAlignConfig const& ac, TScoreObject const& sc)
+  {
+    typedef typename TScoreObject::TValue TScoreValue;
+
+    // DP Matrix
+    std::size_t m = _size(a1, 1);
+    std::size_t n = _size(a2, 1);
+    std::vector<TScoreValue> s(n+1, 0);
+    TScoreValue prevsub = 0;
+
+    // Create profile
+    typedef boost::multi_array<double, 2> TProfile;
+    TProfile p1;
+    TProfile p2;
+    if ((_size(a1, 0) != 1) || (_size(a2, 0) != 1)) {
+      _createProfile(a1, p1);
+      _createProfile(a2, p2);
+    }
+
+    // DP
+    for(std::size_t row = 0; row <= m; ++row) {
+      for(std::size_t col = 0; col <= n; ++col) {
+	// Initialization
+	if ((row == 0) && (col == 0)) {
+	  s[0] = 0;
+	  prevsub = 0;
+	} else if (row == 0) {
+	  s[col] = _horizontalGap(ac, 0, m, col * sc.ge);
+	} else if (col == 0) {
+	  s[0] = _verticalGap(ac, 0, n, row * sc.ge);
+	  if (row - 1 == 0) prevsub = 0;
+	  else prevsub = _verticalGap(ac, 0, n, (row - 1) * sc.ge);
+	} else {
+	  // Recursion
+	  TScoreValue prevprevsub = prevsub;
+	  prevsub = s[col];
+	  s[col] = std::max(std::max(prevprevsub + _score(a1, a2, p1, p2, row-1, col-1, sc), prevsub + _verticalGap(ac, col, n, sc.ge)), s[col-1] + _horizontalGap(ac, row, m, sc.ge));
+	}
+      }
+    }
+
+    // Score
+    return s[n];
+  }
+  
   template<typename TAlign1, typename TAlign2, typename TAlign, typename TAlignConfig, typename TScoreObject>
   inline int
   needle(TAlign1 const& a1, TAlign2 const& a2, TAlign& align, TAlignConfig const& ac, TScoreObject const& sc)
@@ -37,33 +84,66 @@ namespace dicey
     typedef typename TScoreObject::TValue TScoreValue;
 
     // DP Matrix
-    typedef boost::multi_array<TScoreValue, 2> TMatrix;
     std::size_t m = _size(a1, 1);
     std::size_t n = _size(a2, 1);
-    TMatrix mat(boost::extents[m+1][n+1]);
+    std::vector<TScoreValue> s(n+1, 0);
+    TScoreValue prevsub = 0;
 
-    // Initialization
-    mat[0][0] = 0;
-    for(std::size_t col = 1; col <= n; ++col) mat[0][col] = mat[0][col-1] + _horizontalGap(ac, 0, m, sc.ge);
-    for(std::size_t row = 1; row <= m; ++row) mat[row][0] = mat[row-1][0] + _verticalGap(ac, 0, n, sc.ge);
+    // Trace Matrix
+    std::size_t mf = n+1;
+    typedef boost::dynamic_bitset<> TBitSet;
+    TBitSet bit3( (m+1) * (n+1), false);
+    TBitSet bit4( (m+1) * (n+1), false);
+    
+    // Create profile
+    typedef boost::multi_array<double, 2> TProfile;
+    TProfile p1;
+    TProfile p2;
+    if ((_size(a1, 0) != 1) || (_size(a2, 0) != 1)) {
+      _createProfile(a1, p1);
+      _createProfile(a2, p2);
+    }
 
-    // Recursion
-    for(std::size_t row = 1; row <= m; ++row)
-      for(std::size_t col = 1; col <= n; ++col)
-	mat[row][col] = std::max(std::max(mat[row-1][col-1] + _score(a1, a2, row-1, col-1, sc), mat[row-1][col] + _verticalGap(ac, col, n, sc.ge)), mat[row][col-1] + _horizontalGap(ac, row, m, sc.ge));
+    // DP
+    for(std::size_t row = 0; row <= m; ++row) {
+      for(std::size_t col = 0; col <= n; ++col) {
+	// Initialization
+	if ((row == 0) && (col == 0)) {
+	  s[0] = 0;
+	  prevsub = 0;
+	} else if (row == 0) {
+	  s[col] = _horizontalGap(ac, 0, m, col * sc.ge);
+	  bit3[col] = true;
+	} else if (col == 0) {
+	  s[0] = _verticalGap(ac, 0, n, row * sc.ge);
+	  if (row - 1 == 0) prevsub = 0;
+	  else prevsub = _verticalGap(ac, 0, n, (row - 1) * sc.ge);
+	  bit4[row * mf] = true;
+	} else {
+	  // Recursion
+	  TScoreValue prevprevsub = prevsub;
+	  prevsub = s[col];
+	  s[col] = std::max(std::max(prevprevsub + _score(a1, a2, p1, p2, row-1, col-1, sc), prevsub + _verticalGap(ac, col, n, sc.ge)), s[col-1] + _horizontalGap(ac, row, m, sc.ge));
 
-    // Trace-back
+	  // Trace
+	  if (s[col] ==  s[col-1] + _horizontalGap(ac, row, m, sc.ge)) bit3[row * mf + col] = true;
+	  else if (s[col] == prevsub + _verticalGap(ac, col, n, sc.ge)) bit4[row * mf + col] = true;
+	}
+      }
+    }
+	
+    // Trace-back using pointers
     std::size_t row = m;
     std::size_t col = n;
     typedef std::vector<char> TTrace;
     TTrace trace;
     while ((row>0) || (col>0)) {
-      if ((row>0) && (mat[row][col] == mat[row-1][col] + _verticalGap(ac, col, n, sc.ge))) {
-	--row;
-	trace.push_back('v');
-      } else if ((col>0) && (mat[row][col] == mat[row][col-1] + _horizontalGap(ac, row, m, sc.ge))) {
+      if (bit3[row * mf + col]) {
 	--col;
 	trace.push_back('h');
+      } else if (bit4[row * mf + col]) {
+	--row;
+	trace.push_back('v');
       } else {
 	--row;
 	--col;
@@ -75,7 +155,7 @@ namespace dicey
     _createAlignment(trace, a1, a2, align);
 
     // Score
-    return mat[m][n];
+    return s[n];
   }
 
   template<typename TAlign1, typename TAlign2, typename TAlign, typename TAlignConfig>
@@ -92,33 +172,6 @@ namespace dicey
   {
     AlignConfig<false, false> ac;
     return needle(a1, a2, align, ac);
-  }
-
-
-  inline void
-  _debugAlignment(std::string const& pr, std::string const& genomicseq, int32_t const fwdrev) {
-    typedef boost::multi_array<char, 2> TAlign;
-    TAlign align;
-    AlignConfig<true, false> semiglobal;
-    DnaScore<int> sc(5, -4, -4, -4);
-    int32_t score = 0;
-    std::string primer(pr);
-    if (fwdrev == 0) score = needle(primer, genomicseq, align, semiglobal, sc);
-    else {
-      reverseComplement(primer);
-      score = needle(primer, genomicseq, align, semiglobal, sc);
-    }
-    if (fwdrev == 0) std::cerr << ">fwd";
-    else std::cerr << ">rev";
-    std::cerr << " AlignScore: " << score << std::endl;
-    typedef typename TAlign::index TAIndex;
-    for(TAIndex i = 0; i < (TAIndex) align.shape()[0]; ++i) {
-      for(TAIndex j = 0; j < (TAIndex) align.shape()[1]; ++j) {
-	std::cerr << align[i][j];
-      }
-      std::cerr << std::endl;
-    }
-    std::cerr << std::endl;
   }
 
 }

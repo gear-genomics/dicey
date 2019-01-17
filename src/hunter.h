@@ -47,6 +47,7 @@ Contact: Tobias Rausch (rausch@embl.de)
 
 #include "neighbors.h"
 #include "util.h"
+#include "needle.h"
 
 using namespace sdsl;
 
@@ -97,8 +98,8 @@ namespace dicey
     boost::program_options::notify(vm);
     
     // Check command line arguments
-    if ((vm.count("help")) || (!vm.count("input-file"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] AGGTACTAACG" << std::endl;
+    if ((vm.count("help")) || (!vm.count("input-file")) || (!vm.count("genome"))) {
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g Danio_rerio.fa.gz CATTACTAACGTTCAGT" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
@@ -122,10 +123,6 @@ namespace dicey
     // Set prefix and suffix based on edit distance
     c.pre_context = 0;
     c.post_context = 0;
-    if (c.indel) {
-      c.pre_context += c.distance;
-      c.post_context += c.distance;
-    }
 
     // Show cmd
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
@@ -185,6 +182,8 @@ namespace dicey
     rcfile << '[';
     
     // Search
+    now = boost::posix_time::second_clock::local_time();
+    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Search genomic matches" << std::endl;
     uint32_t hits = 0;
     for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
       for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
@@ -221,12 +220,45 @@ namespace dicey
 	    std::string genomicseq = pre + s.substr(0, m) + post;
 	    std::string region = seqname[refIndex] + ":" + boost::lexical_cast<std::string>(chrpos+1) + "-" + boost::lexical_cast<std::string>(chrpos+query.size());
 	    nlohmann::json j;
-	    j["reference"] = genomicseq;
 	    if (fwrvidx == 0) {
-	      j["query"] = c.sequence;
+	      if (c.indel) {
+		AlignConfig<false, false> global;
+		DnaScore<int> sc(1, 0, 0, 0);
+		typedef boost::multi_array<char, 2> TAlign;
+		TAlign align;
+		needle(genomicseq, c.sequence , align, global, sc);
+		std::string refalign = "";
+		std::string queryalign = "";
+		for(uint32_t j = 0; j<align.shape()[1]; ++j) {
+		  refalign += align[0][j];
+		  queryalign += align[1][j];
+		}
+		j["reference"] = refalign;
+		j["query"] = queryalign;
+	      } else {
+		j["reference"] = genomicseq;
+		j["query"] = c.sequence;
+	      }
 	      j["orientation"] = "+";
 	    } else {
-	      j["query"] = revSequence;
+	      if (c.indel) {
+		AlignConfig<false, false> global;
+		DnaScore<int> sc(1, 0, 0, 0);
+		typedef boost::multi_array<char, 2> TAlign;
+		TAlign align;
+		needle(genomicseq, revSequence, align, global, sc);
+		std::string refalign = "";
+		std::string queryalign = "";
+		for(uint32_t j = 0; j<align.shape()[1]; ++j) {
+		  refalign += align[0][j];
+		  queryalign += align[1][j];
+		}
+		j["reference"] = refalign;
+		j["query"] = queryalign;
+	      } else {
+		j["reference"] = genomicseq;
+		j["query"] = revSequence;
+	      }
 	      j["orientation"] = "-";
 	    }
 	    j["region"] = region;
@@ -239,6 +271,10 @@ namespace dicey
     }
     rcfile << ']' << std::endl;
     rcfile.pop();
+
+    // Done
+    now = boost::posix_time::second_clock::local_time();
+    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Done." << std::endl;
     
     return 0;
   }
