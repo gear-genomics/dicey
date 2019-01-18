@@ -64,6 +64,63 @@ namespace dicey
     boost::filesystem::path outfile;
   };
 
+
+  struct DnaHit {
+    int32_t score;
+    uint32_t chr;
+    uint32_t start;
+    uint32_t end;
+    char strand;
+    std::string refalign;
+    std::string queryalign;
+    
+    DnaHit(int32_t sc, uint32_t const refIndex, uint32_t const s, uint32_t const e, char const orient, std::string const& ra, std::string const& qa) : score(sc), chr(refIndex), start(s), end(e), strand(orient), refalign(ra), queryalign(qa) {}
+  };
+
+  template<typename TRecord>
+  struct SortDnaHit : public std::binary_function<TRecord, TRecord, bool> {
+    inline bool operator()(TRecord const& a, TRecord const& b) const {
+      return ((a.score > b.score) || ((a.score == b.score) && (a.chr < b.chr)) || ((a.score == b.score) && (a.chr == b.chr) && (a.start < b.start)));
+    }
+  };
+
+
+  template<typename TScore>
+  inline int32_t
+  needleScore(std::string const& a, std::string const& b, TScore const& sc) {
+    int32_t score = 0;
+    for(uint32_t i = 0; ((i<a.size()) && (i<b.size())); ++i) {
+      if (a[i] == b[i]) score += sc.match;
+      else score += sc.mismatch;
+    }
+    return score;
+  }
+
+  template<typename TConfig>
+  inline void
+  jsonDnaHitOut(TConfig const& c, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
+    // Output file
+    boost::iostreams::filtering_ostream rcfile;
+    rcfile.push(boost::iostreams::gzip_compressor());
+    rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+    rcfile << '[';
+    
+    for(uint32_t i = 0; i < ht.size(); ++i) {
+      if (i>0) rcfile << ',';
+      nlohmann::json j;
+      j["score"] = ht[i].score;
+      j["chr"] = qn[ht[i].chr];
+      j["start"] = ht[i].start;
+      j["end"] = ht[i].end;
+      j["strand"] = std::string(1, ht[i].strand);
+      j["refalign"] = ht[i].refalign;
+      j["queryalign"] = ht[i].queryalign;
+      rcfile << j.dump();
+    }
+    rcfile << ']' << std::endl;
+    rcfile.pop();
+  }
+  
   int hunter(int argc, char** argv) {
     HunterConfig c;
   
@@ -159,7 +216,7 @@ namespace dicey
     neighbors(c.sequence, alphabet, c.distance, c.indel, fwrv[0]);
     std::cout << "(#n=" << fwrv[0].size() << ")" << std::endl;
     // Debug
-    //for(TStringSet::iterator it = fwdset.begin(); it != fwdset.end(); ++it) std::cerr << *it << std::endl;
+    for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
 
     // Reverse complement set?
     if (c.reverse) {
@@ -169,16 +226,11 @@ namespace dicey
       std::cout << "(#n=" << fwrv[1].size() << ")" << std::endl;
     }
 
-    // Output file
-    boost::iostreams::filtering_ostream rcfile;
-    rcfile.push(boost::iostreams::gzip_compressor());
-    rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
-    rcfile << '[';
-    
     // Search
     now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Search genomic matches" << std::endl;
     uint32_t hits = 0;
+    std::vector<DnaHit> ht;
     for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
       for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
 	std::string query = *it;
@@ -195,62 +247,58 @@ namespace dicey
 	    uint32_t chrpos = bestPos - cumsum;
 	    auto s = extract(fm_index, locations[i], locations[i] + m -1);
 
-	    // Create json record
+	    // Create DNA hit
 	    std::string genomicseq = s.substr(0, m);
-	    std::string region = seqname[refIndex] + ":" + boost::lexical_cast<std::string>(chrpos+1) + "-" + boost::lexical_cast<std::string>(chrpos+query.size());
-	    nlohmann::json j;
+	    DnaScore<int32_t> sc(1, -1, -1, -1);
+	    typedef boost::multi_array<char, 2> TAlign;
+	    AlignConfig<false, false> global;
 	    if (fwrvidx == 0) {
 	      if (c.indel) {
-		AlignConfig<false, false> global;
-		DnaScore<int> sc(1, 0, 0, 0);
-		typedef boost::multi_array<char, 2> TAlign;
 		TAlign align;
-		needle(genomicseq, c.sequence , align, global, sc);
+		int32_t score = needle(genomicseq, c.sequence , align, global, sc);
 		std::string refalign = "";
 		std::string queryalign = "";
 		for(uint32_t j = 0; j<align.shape()[1]; ++j) {
 		  refalign += align[0][j];
 		  queryalign += align[1][j];
 		}
-		j["reference"] = refalign;
-		j["query"] = queryalign;
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '+', refalign, queryalign));
 	      } else {
-		j["reference"] = genomicseq;
-		j["query"] = c.sequence;
+		int32_t score = needleScore(genomicseq, c.sequence, sc);
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '+', genomicseq, c.sequence));
 	      }
-	      j["orientation"] = "+";
 	    } else {
 	      if (c.indel) {
-		AlignConfig<false, false> global;
-		DnaScore<int> sc(1, 0, 0, 0);
-		typedef boost::multi_array<char, 2> TAlign;
 		TAlign align;
-		needle(genomicseq, revSequence, align, global, sc);
+		int32_t score = needle(genomicseq, revSequence, align, global, sc);
 		std::string refalign = "";
 		std::string queryalign = "";
 		for(uint32_t j = 0; j<align.shape()[1]; ++j) {
 		  refalign += align[0][j];
 		  queryalign += align[1][j];
 		}
-		j["reference"] = refalign;
-		j["query"] = queryalign;
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '-', refalign, queryalign));
 	      } else {
-		j["reference"] = genomicseq;
-		j["query"] = revSequence;
+		int32_t score = needleScore(genomicseq, revSequence, sc);
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '-', genomicseq, revSequence));
 	      }
-	      j["orientation"] = "-";
 	    }
-	    j["region"] = region;
-	    if (hits) rcfile << ',';
-	    rcfile << j.dump();
 	    ++hits;
 	  }
 	}
       }
     }
-    rcfile << ']' << std::endl;
-    rcfile.pop();
 
+    // Sort
+    now = boost::posix_time::second_clock::local_time();
+    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Sort matches" << std::endl;
+    std::sort(ht.begin(), ht.end(), SortDnaHit<DnaHit>());
+
+    // Output
+    now = boost::posix_time::second_clock::local_time();
+    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Output matches" << std::endl;
+    jsonDnaHitOut(c, seqname, ht);
+    
     // Done
     now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Done." << std::endl;
