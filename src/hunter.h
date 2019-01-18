@@ -58,6 +58,8 @@ namespace dicey
     bool indel;
     bool reverse;
     uint32_t distance;
+    std::size_t pre_context;
+    std::size_t post_context;
     std::size_t max_locations;
     std::string sequence;
     boost::filesystem::path genome;
@@ -154,7 +156,7 @@ namespace dicey
     
     // Check command line arguments
     if ((vm.count("help")) || (!vm.count("input-file")) || (!vm.count("genome"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g Danio_rerio.fa.gz CATTACTAACGTTCAGT" << std::endl;
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g Danio_rerio.fa.gz CATTACTAACATCAGT" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
@@ -170,11 +172,18 @@ namespace dicey
     c.sequence = replaceNonDna(c.sequence);
     std::string revSequence = c.sequence;
     reverseComplement(revSequence);
-
     
     // Check distance
     if (c.distance >= c.sequence.size()) c.distance = c.sequence.size() - 1;
 
+    // Set prefix and suffix based on edit distance
+    c.pre_context = 0;
+    c.post_context = 0;
+    if (c.indel) {
+      c.pre_context += c.distance;
+      c.post_context += c.distance;
+    }
+    
     // Show cmd
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] ";
@@ -216,7 +225,7 @@ namespace dicey
     neighbors(c.sequence, alphabet, c.distance, c.indel, fwrv[0]);
     std::cout << "(#n=" << fwrv[0].size() << ")" << std::endl;
     // Debug
-    for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
+    //for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
 
     // Reverse complement set?
     if (c.reverse) {
@@ -245,13 +254,28 @@ namespace dicey
 	    uint32_t refIndex = 0;
 	    for(; bestPos >= cumsum + seqlen[refIndex]; ++refIndex) cumsum += seqlen[refIndex];
 	    uint32_t chrpos = bestPos - cumsum;
-	    auto s = extract(fm_index, locations[i], locations[i] + m -1);
+	    std::size_t pre_extract = c.pre_context;
+	    std::size_t post_extract = c.post_context;
+	    if (pre_extract > locations[i]) {
+	      pre_extract = locations[i];
+	    }
+	    if (locations[i]+m+post_extract > fm_index.size()) {
+	      post_extract = fm_index.size() - locations[i] - m;
+	    }
+	    auto s = extract(fm_index, locations[i]-pre_extract, locations[i]+m+post_extract);
+	    std::string pre = s.substr(0, pre_extract);
+	    s = s.substr(pre_extract);
+	    if (pre.find_last_of('\n') != std::string::npos) {
+	      pre = pre.substr(pre.find_last_of('\n')+1);
+	    }
+	    std::string post = s.substr(m);
+	    post = post.substr(0, post.find_first_of('\n'));
 
-	    // Create DNA hit
-	    std::string genomicseq = s.substr(0, m);
+	    // Genomic sequence
+	    std::string genomicseq = pre + s.substr(0, m) + post;
 	    DnaScore<int32_t> sc(1, -1, -1, -1);
 	    typedef boost::multi_array<char, 2> TAlign;
-	    AlignConfig<false, false> global;
+	    AlignConfig<false, true> global;
 	    if (fwrvidx == 0) {
 	      if (c.indel) {
 		TAlign align;
