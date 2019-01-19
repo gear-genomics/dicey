@@ -57,6 +57,7 @@ namespace dicey
   struct HunterConfig {
     bool indel;
     bool reverse;
+    bool hasOutfile;
     uint32_t distance;
     std::size_t pre_context;
     std::size_t post_context;
@@ -98,15 +99,10 @@ namespace dicey
     return score;
   }
 
-  template<typename TConfig>
+  template<typename TStream>
   inline void
-  jsonDnaHitOut(TConfig const& c, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
-    // Output file
-    boost::iostreams::filtering_ostream rcfile;
-    rcfile.push(boost::iostreams::gzip_compressor());
-    rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+  writeJsonDnaHitOut(TStream& rcfile, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
     rcfile << '[';
-    
     for(uint32_t i = 0; i < ht.size(); ++i) {
       if (i>0) rcfile << ',';
       nlohmann::json j;
@@ -120,7 +116,21 @@ namespace dicey
       rcfile << j.dump();
     }
     rcfile << ']' << std::endl;
-    rcfile.pop();
+  }    
+  
+  template<typename TConfig>
+  inline void
+  jsonDnaHitOut(TConfig const& c, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
+    if (c.hasOutfile) {
+      // Output file
+      boost::iostreams::filtering_ostream rcfile;
+      rcfile.push(boost::iostreams::gzip_compressor());
+      rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+      writeJsonDnaHitOut(rcfile, qn, ht);
+      rcfile.pop();
+    } else {
+      writeJsonDnaHitOut(std::cout, qn, ht);
+    }
   }
   
   int hunter(int argc, char** argv) {
@@ -131,7 +141,7 @@ namespace dicey
     generic.add_options()
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
-      ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("hits.json.gz"), "output file")
+      ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile), "gzipped output file")
       ("maxmatches,m", boost::program_options::value<std::size_t>(&c.max_locations)->default_value(1000), "max. number of matches")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
@@ -166,6 +176,8 @@ namespace dicey
     else c.indel = false;
     if (!vm.count("forward")) c.reverse = true;
     else c.reverse = false;
+    if (vm.count("outfile")) c.hasOutfile = true;
+    else c.hasOutfile = false;
 
     // Upper case
     c.sequence = boost::to_upper_copy(c.sequence);
@@ -184,13 +196,6 @@ namespace dicey
       c.post_context += c.distance;
     }
     
-    // Show cmd
-    boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] ";
-    std::cout << "dicey ";
-    for(int i=0; i<argc; ++i) { std::cout << argv[i] << ' '; }
-    std::cout << std::endl;
-
     // Parse chromosome lengths
     std::vector<uint32_t> seqlen;
     std::vector<std::string> seqname;
@@ -204,8 +209,6 @@ namespace dicey
     csa_wt<> fm_index;  
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
     std::string index_file = op.string() + ".fm9";
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Load FM-Index" << std::endl;
     if (!load_from_file(fm_index, index_file)) {
       std::cerr << "Index cannot be loaded!" << std::endl;
       return 1;
@@ -217,27 +220,17 @@ namespace dicey
     TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
 
     // Generate neighbors
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Generate forward sequence neighborhood " << std::flush;
     typedef std::set<std::string> TStringSet;
     typedef std::vector<TStringSet> TFwdRevSearchSets;
     TFwdRevSearchSets fwrv(2, TStringSet());
     neighbors(c.sequence, alphabet, c.distance, c.indel, fwrv[0]);
-    std::cout << "(#n=" << fwrv[0].size() << ")" << std::endl;
     // Debug
     //for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
 
     // Reverse complement set?
-    if (c.reverse) {
-      now = boost::posix_time::second_clock::local_time();
-      std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Generate reverse sequence neighborhood " << std::flush;
-      neighbors(revSequence, alphabet, c.distance, c.indel, fwrv[1]);
-      std::cout << "(#n=" << fwrv[1].size() << ")" << std::endl;
-    }
+    if (c.reverse) neighbors(revSequence, alphabet, c.distance, c.indel, fwrv[1]);
 
     // Search
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Search genomic matches" << std::endl;
     uint32_t hits = 0;
     std::vector<DnaHit> ht;
     for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
@@ -314,18 +307,10 @@ namespace dicey
     }
 
     // Sort
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Sort matches" << std::endl;
     std::sort(ht.begin(), ht.end(), SortDnaHit<DnaHit>());
 
     // Output
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Output matches" << std::endl;
     jsonDnaHitOut(c, seqname, ht);
-    
-    // Done
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Done." << std::endl;
     
     return 0;
   }
