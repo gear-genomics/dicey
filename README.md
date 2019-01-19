@@ -3,4 +3,15 @@
 [![GitHub Issues](https://img.shields.io/github/issues/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/issues)
 
 # dicey
+
 In-silico PCR and variant primer design
+
+## Installation from source
+
+```bash
+git clone --recursive https://github.com/gear-genomics/dicey.git
+cd dicey/
+make
+```
+
+This will generate the binary `src/dicey`.
