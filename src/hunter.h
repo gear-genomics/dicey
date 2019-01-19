@@ -355,7 +355,10 @@ namespace dicey
 	}
       }
     }
-    
+    if (hits >= c.max_locations) {
+      std::string m = "Warning: More than " + boost::lexical_cast<std::string>(c.max_locations) + " matches found. Only first " + boost::lexical_cast<std::string>(c.max_locations) + " matches are reported!";
+      msg.push_back(m);
+    }
     
     // Sort
     std::sort(ht.begin(), ht.end(), SortDnaHit<DnaHit>());
