@@ -99,10 +99,22 @@ namespace dicey
     return score;
   }
 
-  template<typename TStream>
+  template<typename TConfig, typename TStream>
   inline void
-  writeJsonDnaHitOut(TStream& rcfile, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
-    rcfile << '[';
+    writeJsonDnaHitOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
+    rcfile << "{\"meta\": ";
+    nlohmann::json meta;
+    meta["version"] = diceyVersionNumber;
+    meta["distance"] = c.distance;
+    meta["sequence"] = c.sequence;
+    meta["genome"] = c.genome.string();
+    meta["outfile"] = c.outfile.string();
+    meta["maxmatches"] = c.max_locations;
+    meta["hamming"] = (!c.indel);
+    meta["forwardonly"] = (!c.reverse);
+    rcfile << meta.dump() << ',' << std::endl;
+    
+    rcfile << "\"data\": [";
     for(uint32_t i = 0; i < ht.size(); ++i) {
       if (i>0) rcfile << ',';
       nlohmann::json j;
@@ -116,6 +128,7 @@ namespace dicey
       rcfile << j.dump();
     }
     rcfile << ']' << std::endl;
+    rcfile << '}' << std::endl;
   }    
   
   template<typename TConfig>
@@ -126,10 +139,10 @@ namespace dicey
       boost::iostreams::filtering_ostream rcfile;
       rcfile.push(boost::iostreams::gzip_compressor());
       rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
-      writeJsonDnaHitOut(rcfile, qn, ht);
+      writeJsonDnaHitOut(c, rcfile, qn, ht);
       rcfile.pop();
     } else {
-      writeJsonDnaHitOut(std::cout, qn, ht);
+      writeJsonDnaHitOut(c, std::cout, qn, ht);
     }
   }
   
