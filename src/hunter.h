@@ -28,6 +28,8 @@ Contact: Tobias Rausch (rausch@embl.de)
 #include <iomanip>
 
 #include <boost/dynamic_bitset.hpp>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/program_options/cmdline.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -101,48 +103,68 @@ namespace dicey
 
   template<typename TConfig, typename TStream>
   inline void
-    writeJsonDnaHitOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
-    rcfile << "{\"meta\": ";
-    nlohmann::json meta;
-    meta["version"] = diceyVersionNumber;
-    meta["distance"] = c.distance;
-    meta["sequence"] = c.sequence;
-    meta["genome"] = c.genome.string();
-    meta["outfile"] = c.outfile.string();
-    meta["maxmatches"] = c.max_locations;
-    meta["hamming"] = (!c.indel);
-    meta["forwardonly"] = (!c.reverse);
-    rcfile << meta.dump() << ',' << std::endl;
-    
-    rcfile << "\"data\": [";
-    for(uint32_t i = 0; i < ht.size(); ++i) {
+  writeJsonDnaHitOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht, std::vector<std::string> const& msg) {
+    bool errors = false;
+    rcfile << "{";
+    // Errors
+    rcfile << "\"errors\": [";
+    for(uint32_t i = 0; i < msg.size(); ++i) {
+      std::string msgtype = "warning";
+      if (boost::starts_with(msg[i], "Error")) {	
+	errors = true;
+	msgtype = "error";
+      }
+      nlohmann::json err;
+      err["type"] = msgtype;
+      err["title"] = msg[i];
       if (i>0) rcfile << ',';
-      nlohmann::json j;
-      j["score"] = ht[i].score;
-      j["chr"] = qn[ht[i].chr];
-      j["start"] = ht[i].start;
-      j["end"] = ht[i].end;
-      j["strand"] = std::string(1, ht[i].strand);
-      j["refalign"] = ht[i].refalign;
-      j["queryalign"] = ht[i].queryalign;
-      rcfile << j.dump();
+      rcfile << err.dump();
     }
-    rcfile << ']' << std::endl;
+    rcfile << "]";
+    if (!errors) {
+      // Meta information
+      rcfile << ",\"meta\":";
+      nlohmann::json meta;
+      meta["version"] = diceyVersionNumber;
+      meta["distance"] = c.distance;
+      meta["sequence"] = c.sequence;
+      meta["genome"] = c.genome.string();
+      meta["outfile"] = c.outfile.string();
+      meta["maxmatches"] = c.max_locations;
+      meta["hamming"] = (!c.indel);
+      meta["forwardonly"] = (!c.reverse);
+      rcfile << meta.dump() << ',';
+      
+      rcfile << "\"data\":[";
+      for(uint32_t i = 0; i < ht.size(); ++i) {
+	if (i>0) rcfile << ',';
+	nlohmann::json j;
+	j["score"] = ht[i].score;
+	j["chr"] = qn[ht[i].chr];
+	j["start"] = ht[i].start;
+	j["end"] = ht[i].end;
+	j["strand"] = std::string(1, ht[i].strand);
+	j["refalign"] = ht[i].refalign;
+	j["queryalign"] = ht[i].queryalign;
+	rcfile << j.dump();
+      }
+      rcfile << ']';
+    }
     rcfile << '}' << std::endl;
-  }    
+  }
   
   template<typename TConfig>
   inline void
-  jsonDnaHitOut(TConfig const& c, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht) {
+  jsonDnaHitOut(TConfig const& c, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht, std::vector<std::string> const& msg) {
     if (c.hasOutfile) {
       // Output file
       boost::iostreams::filtering_ostream rcfile;
       rcfile.push(boost::iostreams::gzip_compressor());
       rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
-      writeJsonDnaHitOut(c, rcfile, qn, ht);
+      writeJsonDnaHitOut(c, rcfile, qn, ht, msg);
       rcfile.pop();
     } else {
-      writeJsonDnaHitOut(c, std::cout, qn, ht);
+      writeJsonDnaHitOut(c, std::cout, qn, ht, msg);
     }
   }
   
@@ -184,6 +206,12 @@ namespace dicey
       return -1;
     }
 
+    // DNA Hits
+    std::vector<DnaHit> ht;
+    std::vector<std::string> msg;
+    std::vector<uint32_t> seqlen;
+    std::vector<std::string> seqname;
+    
     // Cmd switches
     if (!vm.count("hamming")) c.indel = true;
     else c.indel = false;
@@ -194,12 +222,15 @@ namespace dicey
 
     // Upper case
     c.sequence = boost::to_upper_copy(c.sequence);
-    c.sequence = replaceNonDna(c.sequence);
+    c.sequence = replaceNonDna(c.sequence, msg);
     std::string revSequence = c.sequence;
     reverseComplement(revSequence);
     
     // Check distance
-    if (c.distance >= c.sequence.size()) c.distance = c.sequence.size() - 1;
+    if (c.distance >= c.sequence.size()) {
+      c.distance = c.sequence.size() - 1;
+      msg.push_back("Warning: Distance was adjusted to sequence length!");
+    }
 
     // Set prefix and suffix based on edit distance
     c.pre_context = 0;
@@ -209,12 +240,18 @@ namespace dicey
       c.post_context += c.distance;
     }
     
+    // Check genome
+    if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
+      msg.push_back("Error: Genome does not exist!");
+      jsonDnaHitOut(c, seqname, ht, msg);
+      return 1;
+    }
+    
     // Parse chromosome lengths
-    std::vector<uint32_t> seqlen;
-    std::vector<std::string> seqname;
     uint32_t nseq = getSeqLenName(c, seqlen, seqname);
     if (!nseq) {
-      std::cerr << "Could not retrieve sequence lengths!" << std::endl;
+      msg.push_back("Error: Could not retrieve sequence lengths!");
+      jsonDnaHitOut(c, seqname, ht, msg);
       return 1;
     }
 
@@ -223,7 +260,8 @@ namespace dicey
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
     std::string index_file = op.string() + ".fm9";
     if (!load_from_file(fm_index, index_file)) {
-      std::cerr << "Index cannot be loaded!" << std::endl;
+      msg.push_back("Error: Fasta index cannot be loaded!");
+      jsonDnaHitOut(c, seqname, ht, msg);
       return 1;
     }
 
@@ -245,7 +283,6 @@ namespace dicey
 
     // Search
     uint32_t hits = 0;
-    std::vector<DnaHit> ht;
     for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
       for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
 	std::string query = *it;
@@ -318,12 +355,13 @@ namespace dicey
 	}
       }
     }
-
+    
+    
     // Sort
     std::sort(ht.begin(), ht.end(), SortDnaHit<DnaHit>());
 
     // Output
-    jsonDnaHitOut(c, seqname, ht);
+    jsonDnaHitOut(c, seqname, ht, msg);
     
     return 0;
   }

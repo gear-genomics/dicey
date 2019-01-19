@@ -54,12 +54,12 @@ namespace dicey
   }
 
   inline std::string
-  replaceNonDna(std::string const& str) {
+  replaceNonDna(std::string const& str, std::vector<std::string>& msg) {
     std::string out;
     for(uint32_t i = 0; i<str.size();++i) {
       if ((str[i] == 'A') || (str[i] == 'C') || (str[i] == 'G') || (str[i] == 'T')) out = out.append(str, i, 1);
       else {
-	std::cerr << "Warning: Non-DNA character detected " << str[i] << std::endl;
+	msg.push_back("Warning: Non-DNA character in nucleotide sequence detected and replaced by 'N'!");
 	out = out.append("N");
       }
     }
