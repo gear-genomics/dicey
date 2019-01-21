@@ -7,8 +7,13 @@ import json
 
 for line in fileinput.input():
     df = json.loads(line)
-    for hit in df['data']:
-        print(">", hit['chr'], ":", hit['start'], "-", hit['end'], " - Score:", hit['score'], sep="")
-        print(hit['queryalign'])
-        print(hit['refalign'])
+    if "errors" in df.keys():
+        for err in df['errors']:
+            print(err['title'])
         print()
+    if "data" in df.keys():
+        for hit in df['data']:
+            print(">", hit['chr'], ":", hit['start'], "-", hit['end'], " - Score:", hit['score'], sep="")
+            print(hit['queryalign'])
+            print(hit['refalign'])
+            print()

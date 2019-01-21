@@ -69,6 +69,7 @@ namespace dicey
     double penLen;
     uint32_t kmer;
     uint32_t distance;
+    uint32_t maxNeighborhood;
 
     // Primer3
     double temp;
@@ -159,6 +160,7 @@ namespace dicey
     appr.add_options()
       ("kmer,k", boost::program_options::value<uint32_t>(&c.kmer)->default_value(15), "k-mer size")
       ("maxmatches,m", boost::program_options::value<std::size_t>(&c.max_locations)->default_value(10000), "max. number of matches per k-mer")
+      ("maxNeighborhood,x", boost::program_options::value<uint32_t>(&c.maxNeighborhood)->default_value(10000), "max. neighborhood size")
       ("pruneprimer,q", "prune primers with more than maxmatches") 
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
@@ -358,12 +360,12 @@ namespace dicey
       qr = qr.substr(qr.size() - c.kmer);
       typedef std::set<std::string> TStringSet;
       TStringSet fwdset;
-      neighbors(qr, alphabet, c.distance, c.indel, fwdset);
+      neighbors(qr, alphabet, c.distance, c.indel, c.maxNeighborhood, fwdset);
       // Debug
       //for(TStringSet::iterator it = fwdset.begin(); it != fwdset.end(); ++it) std::cerr << *it << std::endl;
       TStringSet revset;
       reverseComplement(qr);
-      neighbors(qr, alphabet, c.distance, c.indel, revset);
+      neighbors(qr, alphabet, c.distance, c.indel, c.maxNeighborhood, revset);
       int32_t qhits = 0;
       for(int32_t fwdrev = 0; fwdrev < 2; ++fwdrev) {
 	TStringSet::iterator its;

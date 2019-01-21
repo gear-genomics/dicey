@@ -61,6 +61,7 @@ namespace dicey
     bool reverse;
     bool hasOutfile;
     uint32_t distance;
+    uint32_t maxNeighborhood;
     std::size_t pre_context;
     std::size_t post_context;
     std::size_t max_locations;
@@ -178,6 +179,7 @@ namespace dicey
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile), "gzipped output file")
       ("maxmatches,m", boost::program_options::value<std::size_t>(&c.max_locations)->default_value(1000), "max. number of matches")
+      ("maxNeighborhood,x", boost::program_options::value<uint32_t>(&c.maxNeighborhood)->default_value(10000), "max. neighborhood size")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
       ("forward,f", "only forward matches")
@@ -274,13 +276,19 @@ namespace dicey
     typedef std::set<std::string> TStringSet;
     typedef std::vector<TStringSet> TFwdRevSearchSets;
     TFwdRevSearchSets fwrv(2, TStringSet());
-    neighbors(c.sequence, alphabet, c.distance, c.indel, fwrv[0]);
+    neighbors(c.sequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[0]);
     // Debug
     //for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
 
     // Reverse complement set?
-    if (c.reverse) neighbors(revSequence, alphabet, c.distance, c.indel, fwrv[1]);
+    if (c.reverse) neighbors(revSequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[1]);
 
+    // Check neighborhood size
+    if ((fwrv[0].size() >= c.maxNeighborhood) || (fwrv[1].size() >= c.maxNeighborhood)) {
+      std::string m = "Warning: Neighborhood size exceeds " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " candidates. Only first " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " neighbors are searched, results are likely incomplete!";
+      msg.push_back(m);
+    }
+    
     // Search
     uint32_t hits = 0;
     for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
