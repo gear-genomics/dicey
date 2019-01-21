@@ -13,7 +13,7 @@ for line in fileinput.input():
         print()
     if "data" in df.keys():
         for hit in df['data']:
-            print(">", hit['chr'], ":", hit['start'], "-", hit['end'], " - Distance: ", hit['distance'], sep="")
+            print(">", hit['chr'], ":", hit['start'], "-", hit['end'], " (Strand: ", hit['strand'], ", Distance: ", hit['distance'], ")", sep="")
             print(hit['queryalign'])
             print(hit['refalign'])
             print()

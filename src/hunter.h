@@ -90,6 +90,16 @@ namespace dicey
   };
 
 
+  template<typename TAlign>
+  inline uint32_t
+  _trailGap(TAlign const& align) {
+    uint32_t lastAlignedPos = align.shape()[1] - 1;
+    for(uint32_t j = 0; j<align.shape()[1]; ++j) {
+      if (align[1][j] != '-') lastAlignedPos = j;
+    }
+    return (align.shape()[1] - lastAlignedPos - 1);
+  }
+
   template<typename TScore>
   inline int32_t
   needleScore(std::string const& a, std::string const& b, TScore const& sc) {
@@ -143,19 +153,26 @@ namespace dicey
       meta["hamming"] = (!c.indel);
       meta["forwardonly"] = (!c.reverse);
       rcfile << meta.dump() << ',';
-      
-      rcfile << "\"data\":[";
+
+
+      uint32_t oldchr = 999999;
+      uint32_t oldstart = 0;
+      rcfile << "\"data\":[";      
       for(uint32_t i = 0; i < ht.size(); ++i) {
-	if (i>0) rcfile << ',';
-	nlohmann::json j;
-	j["distance"] = std::abs(ht[i].score);
-	j["chr"] = qn[ht[i].chr];
-	j["start"] = ht[i].start;
-	j["end"] = ht[i].start + _nucleotideLength(ht[i].refalign) - 1;
-	j["strand"] = std::string(1, ht[i].strand);
-	j["refalign"] = ht[i].refalign;
-	j["queryalign"] = ht[i].queryalign;
-	rcfile << j.dump();
+	if ((oldchr != ht[i].chr) || (oldstart != ht[i].start)) {
+	  if (i>0) rcfile << ',';
+	  nlohmann::json j;
+	  j["distance"] = std::abs(ht[i].score);
+	  j["chr"] = qn[ht[i].chr];
+	  j["start"] = ht[i].start;
+	  j["end"] = ht[i].start + _nucleotideLength(ht[i].refalign) - 1;
+	  j["strand"] = std::string(1, ht[i].strand);
+	  j["refalign"] = ht[i].refalign;
+	  j["queryalign"] = ht[i].queryalign;
+	  rcfile << j.dump();
+	}
+	oldchr = ht[i].chr;
+	oldstart = ht[i].start;
       }
       rcfile << ']';
     }
@@ -349,9 +366,15 @@ namespace dicey
 		int32_t score = needle(genomicseq, c.sequence , align, global, sc);
 		std::string refalign = "";
 		std::string queryalign = "";
-		for(uint32_t j = 0; j<align.shape()[1]; ++j) {
-		  refalign += align[0][j];
-		  queryalign += align[1][j];
+		bool leadGap = true;
+		for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
+		  if (align[1][j] != '-') leadGap = false;
+		  if (!leadGap) {
+		    refalign += align[0][j];
+		    queryalign += align[1][j];
+		  } else {
+		    ++chrpos;
+		  }
 		}
 		ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', refalign, queryalign));
 	      } else {
@@ -364,9 +387,15 @@ namespace dicey
 		int32_t score = needle(genomicseq, revSequence, align, global, sc);
 		std::string refalign = "";
 		std::string queryalign = "";
-		for(uint32_t j = 0; j<align.shape()[1]; ++j) {
-		  refalign += align[0][j];
-		  queryalign += align[1][j];
+		bool leadGap = true;
+		for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
+		  if (align[1][j] != '-') leadGap = false;
+		  if (!leadGap) {
+		    refalign += align[0][j];
+		    queryalign += align[1][j];
+		  } else {
+		    ++chrpos;
+		  }
 		}
 		ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', refalign, queryalign));
 	      } else {
