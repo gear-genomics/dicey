@@ -28,10 +28,10 @@ Searching a large reference genome requires a pre-built index on a bgzip compres
 
 The indexing step is only required once. You can then search nucleotide sequences at a user-defined edit or hamming distance.
 
-`./src/dicey hunt -g /opt/dev/saint/fm/Danio_rerio.GRCz10.dna.toplevel.fa.gz CATTACTAACATCAGT | python scripts/json2txt.py`
+`./src/dicey hunt -g hg19.fa.gz TCTCTGCACACACGTTGT | python scripts/json2txt.py`
 
 You can also redirect the output in JSON format to a file.
 
-`./src/dicey hunt -g /opt/dev/saint/fm/Danio_rerio.GRCz10.dna.toplevel.fa.gz -o out.json.gz CATTACTAACATCAGT`
+`./src/dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
 
 
