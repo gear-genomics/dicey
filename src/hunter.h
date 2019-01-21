@@ -75,12 +75,11 @@ namespace dicey
     int32_t score;
     uint32_t chr;
     uint32_t start;
-    uint32_t end;
     char strand;
     std::string refalign;
     std::string queryalign;
     
-    DnaHit(int32_t sc, uint32_t const refIndex, uint32_t const s, uint32_t const e, char const orient, std::string const& ra, std::string const& qa) : score(sc), chr(refIndex), start(s), end(e), strand(orient), refalign(ra), queryalign(qa) {}
+    DnaHit(int32_t sc, uint32_t const refIndex, uint32_t const s, char const orient, std::string const& ra, std::string const& qa) : score(sc), chr(refIndex), start(s), strand(orient), refalign(ra), queryalign(qa) {}
   };
 
   template<typename TRecord>
@@ -102,6 +101,15 @@ namespace dicey
     return score;
   }
 
+  inline uint32_t
+  _nucleotideLength(std::string const& seq) {
+    uint32_t s = 0;
+    for(uint32_t i = 0; i < seq.size(); ++i) {
+      if (seq[i] != '-') ++s;
+    }
+    return s;
+  }
+  
   template<typename TConfig, typename TStream>
   inline void
   writeJsonDnaHitOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht, std::vector<std::string> const& msg) {
@@ -140,10 +148,10 @@ namespace dicey
       for(uint32_t i = 0; i < ht.size(); ++i) {
 	if (i>0) rcfile << ',';
 	nlohmann::json j;
-	j["score"] = ht[i].score;
+	j["distance"] = std::abs(ht[i].score);
 	j["chr"] = qn[ht[i].chr];
 	j["start"] = ht[i].start;
-	j["end"] = ht[i].end;
+	j["end"] = ht[i].start + _nucleotideLength(ht[i].refalign);
 	j["strand"] = std::string(1, ht[i].strand);
 	j["refalign"] = ht[i].refalign;
 	j["queryalign"] = ht[i].queryalign;
@@ -324,7 +332,8 @@ namespace dicey
 
 	    // Genomic sequence
 	    std::string genomicseq = pre + s.substr(0, m) + post;
-	    DnaScore<int32_t> sc(1, -1, -1, -1);
+	    if (pre.size() < chrpos) chrpos -= pre.size();
+	    DnaScore<int32_t> sc(0, -1, -1, -1);
 	    typedef boost::multi_array<char, 2> TAlign;
 	    AlignConfig<false, true> global;
 	    if (fwrvidx == 0) {
@@ -337,10 +346,10 @@ namespace dicey
 		  refalign += align[0][j];
 		  queryalign += align[1][j];
 		}
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '+', refalign, queryalign));
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', refalign, queryalign));
 	      } else {
 		int32_t score = needleScore(genomicseq, c.sequence, sc);
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '+', genomicseq, c.sequence));
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', genomicseq, c.sequence));
 	      }
 	    } else {
 	      if (c.indel) {
@@ -352,10 +361,10 @@ namespace dicey
 		  refalign += align[0][j];
 		  queryalign += align[1][j];
 		}
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '-', refalign, queryalign));
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', refalign, queryalign));
 	      } else {
 		int32_t score = needleScore(genomicseq, revSequence, sc);
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, chrpos+query.size(), '-', genomicseq, revSequence));
+		ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', genomicseq, revSequence));
 	      }
 	    }
 	    ++hits;
