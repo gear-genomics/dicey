@@ -6,6 +6,7 @@
 
 In-silico PCR and variant primer design
 
+
 ## Installation from source
 
 ```bash
@@ -17,11 +18,20 @@ make
 This will generate the binary `src/dicey`.
 
 
-## Usage
+## Sequence search in an indexed reference genome
+
+Searching a large reference genome requires a pre-built index on a bgzip compressed genome.
+
+`./src/dicey index -o hg19.fa.fm9 hg19.fa.gz`
+
+`samtools faidx hg19.fa.gz`
+
+The indexing step is only required once. You can then search nucleotide sequences at a user-defined edit or hamming distance.
 
 `./src/dicey hunt -g /opt/dev/saint/fm/Danio_rerio.GRCz10.dna.toplevel.fa.gz CATTACTAACATCAGT | python scripts/json2txt.py`
 
-You can also redirect the output to a file:
+You can also redirect the output in JSON format to a file.
 
 `./src/dicey hunt -g /opt/dev/saint/fm/Danio_rerio.GRCz10.dna.toplevel.fa.gz -o out.json.gz CATTACTAACATCAGT`
+
 
