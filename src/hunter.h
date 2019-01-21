@@ -151,7 +151,7 @@ namespace dicey
 	j["distance"] = std::abs(ht[i].score);
 	j["chr"] = qn[ht[i].chr];
 	j["start"] = ht[i].start;
-	j["end"] = ht[i].start + _nucleotideLength(ht[i].refalign);
+	j["end"] = ht[i].start + _nucleotideLength(ht[i].refalign) - 1;
 	j["strand"] = std::string(1, ht[i].strand);
 	j["refalign"] = ht[i].refalign;
 	j["queryalign"] = ht[i].queryalign;
@@ -229,6 +229,13 @@ namespace dicey
     else c.reverse = false;
     if (vm.count("outfile")) c.hasOutfile = true;
     else c.hasOutfile = false;
+
+    // Check sequence length
+    if (c.sequence.size() < 10) {
+      msg.push_back("Error: Input sequence is shorter than 10 nucleotides!");
+      jsonDnaHitOut(c, seqname, ht, msg);
+      return 1;
+    }
 
     // Upper case
     c.sequence = boost::to_upper_copy(c.sequence);
@@ -321,7 +328,7 @@ namespace dicey
 	    if (locations[i]+m+post_extract > fm_index.size()) {
 	      post_extract = fm_index.size() - locations[i] - m;
 	    }
-	    auto s = extract(fm_index, locations[i]-pre_extract, locations[i]+m+post_extract);
+	    auto s = extract(fm_index, locations[i] - pre_extract, locations[i] + m + post_extract - 1);
 	    std::string pre = s.substr(0, pre_extract);
 	    s = s.substr(pre_extract);
 	    if (pre.find_last_of('\n') != std::string::npos) {
@@ -329,7 +336,7 @@ namespace dicey
 	    }
 	    std::string post = s.substr(m);
 	    post = post.substr(0, post.find_first_of('\n'));
-
+	    
 	    // Genomic sequence
 	    std::string genomicseq = pre + s.substr(0, m) + post;
 	    if (pre.size() < chrpos) chrpos -= pre.size();
@@ -373,7 +380,7 @@ namespace dicey
       }
     }
     if (hits >= c.max_locations) {
-      std::string m = "Warning: More than " + boost::lexical_cast<std::string>(c.max_locations) + " matches found. Only first " + boost::lexical_cast<std::string>(c.max_locations) + " matches are reported!";
+      std::string m = "Warning: More than " + boost::lexical_cast<std::string>(c.max_locations) + " matches found. Only first " + boost::lexical_cast<std::string>(c.max_locations) + " matches are reported, results are likely incomplete!";
       msg.push_back(m);
     }
     
