@@ -15,3 +15,13 @@ make
 ```
 
 This will generate the binary `src/dicey`.
+
+
+## Usage
+
+`./src/dicey hunt -g /opt/dev/saint/fm/Danio_rerio.GRCz10.dna.toplevel.fa.gz CATTACTAACATCAGT | python scripts/json2txt.py`
+
+You can also redirect the output to a file:
+
+`./src/dicey hunt -g /opt/dev/saint/fm/Danio_rerio.GRCz10.dna.toplevel.fa.gz -o out.json.gz CATTACTAACATCAGT`
+
