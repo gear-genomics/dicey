@@ -94,6 +94,7 @@ namespace dicey
     bool onFor;
     double temp;
     double perfTemp;
+    std::string genome;
   };
   
   template<typename TRecord>
@@ -145,6 +146,9 @@ namespace dicey
     }
     rcfile << "]";
     if (!errors) {
+      // Load FASTA index
+      faidx_t* fai = fai_load(c.genome.string().c_str());
+      
       // Meta information
       rcfile << ",\"meta\":";
       nlohmann::json meta;
@@ -172,6 +176,7 @@ namespace dicey
 	j["Name"] = pName[allp[i].primerId];
 	j["MatchTm"] = allp[i].perfTemp;
 	j["Seq"] = pSeq[allp[i].primerId];
+	j["Genome"] = allp[i].genome;
 	rcfile << j.dump();
       }
       rcfile << "],";
@@ -193,14 +198,17 @@ namespace dicey
 	j["RevTm"] = pcrColl[i].revTemp;
 	j["RevName"] = pName[pcrColl[i].revId];
 	j["RevSeq"] = pSeq[pcrColl[i].revId];
+	int32_t sl = -1;
+	char* seq = faidx_fetch_seq(fai, qn[pcrColl[i].refIndex].c_str(), pcrColl[i].forPos, pcrColl[i].revPos + pSeq[pcrColl[i].revId].size() - 1, &sl);
+	std::string seqstr = boost::to_upper_copy(std::string(seq));
+	j["Seq"] = seqstr;
 	rcfile << j.dump();
-	//int32_t sl = -1;
-	//char* seq = faidx_fetch_seq(fai, chrom.c_str(), it->forPos, it->revPos, &sl);
-	//std::string seqstr = boost::to_upper_copy(std::string(seq));
-	//rfile << "\"Seq\": \"" << seqstr << "\"}";
-	//free(seq);
+	free(seq);
       }
       rcfile << "]}";
+
+      // Clean-up
+      fai_destroy(fai);
     }
     rcfile << '}' << std::endl;
   }
@@ -455,7 +463,7 @@ namespace dicey
       typedef std::vector<TStringSet> TFwdRevSearchSets;
       TFwdRevSearchSets fwrv(2, TStringSet());
       std::string sequence = pSeq[primerId];
-      int32_t koffset = sequence.size() - c.kmer;
+      uint32_t koffset = sequence.size() - c.kmer;
       sequence = sequence.substr(sequence.size() - c.kmer);
       neighbors(sequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[0]);
       std::string revSequence = sequence;
@@ -541,13 +549,27 @@ namespace dicey
 		if (uphit.find(std::make_pair(refIndex, alignpos)) == uphit.end()) {
 		  // New hit
 		  uphit.insert(std::make_pair(refIndex, alignpos));
-		  if (fwrvidx) chrpos = alignpos;
-		  else chrpos = alignpos - koffset;
+
+		  // Genomic subsequence
+		  if (fwrvidx) {
+		    chrpos = alignpos;
+		    genomicseq = genomicseq.substr(alignpos - chrpos + 1, primer.size());
+		  } else {
+		    uint32_t alignshift = alignpos - chrpos;
+		    chrpos = alignpos - koffset;
+		    if (alignshift >= koffset) {
+		      alignshift -= koffset;
+		      genomicseq = genomicseq.substr(alignshift,  primer.size());
+		    }
+		  }
+
+		  // New primer record
 		  PrimerBind prim;
 		  prim.refIndex = refIndex;
 		  prim.temp = o.temp;
 		  prim.perfTemp = matchTemp;
 		  prim.primerId = primerId;
+		  prim.genome = genomicseq;
 		  if (fwrvidx) {
 		    prim.onFor = false;
 		    prim.pos = chrpos;

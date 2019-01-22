@@ -32,6 +32,7 @@ for line in fileinput.input():
                         print("Primer_", hit["Id"], "_", "Name", "=", hit["Name"], sep="")
                         print("Primer_", hit["Id"], "_", "MatchTm", "=", hit["MatchTm"], sep="")
                         print("Primer_", hit["Id"], "_", "Seq", "=", hit["Seq"], sep="")
+                        print("Primer_", hit["Id"], "_", "Genome", "=", hit["Genome"], sep="")
                 if "amplicons" in df['data'].keys():
                     for hit in df['data']['amplicons']:
                         print("Amplicon_", hit["Id"], "_", "Length", "=", hit["Length"], sep="")
@@ -44,3 +45,4 @@ for line in fileinput.input():
                         print("Amplicon_", hit["Id"], "_", "RevTm", "=", hit["RevTm"], sep="")
                         print("Amplicon_", hit["Id"], "_", "RevName", "=", hit["RevName"], sep="")
                         print("Amplicon_", hit["Id"], "_", "RevSeq", "=", hit["RevSeq"], sep="")
+                        print("Amplicon_", hit["Id"], "_", "Seq", "=", hit["Seq"], sep="")
