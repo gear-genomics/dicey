@@ -49,7 +49,6 @@ Contact: Tobias Rausch (rausch@embl.de)
 #include "align.h"
 #include "needle.h"
 #include "thal.h"
-#include "json.h"
 #include "util.h"
 
 using namespace sdsl;
