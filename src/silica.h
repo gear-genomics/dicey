@@ -165,7 +165,8 @@ namespace dicey
 	j["Chrom"] = qn[allp[i].refIndex];
 	j["Id"] = i;
 	j["Tm"] = allp[i].temp;
-	j["Pos"] = allp[i].pos;
+	j["Pos"] = allp[i].pos + 1;
+	j["End"] = allp[i].pos + pSeq[allp[i].primerId].size();	
 	if (allp[i].onFor) j["Ori"] = "forward";
 	else j["Ori"] = "reverse";
 	j["Name"] = pName[allp[i].primerId];
@@ -182,11 +183,13 @@ namespace dicey
 	j["Id"] = i;
 	j["Length"] = pcrColl[i].leng;
 	j["Penalty"] = pcrColl[i].penalty;
-	j["ForPos"] = pcrColl[i].forPos;
+	j["ForPos"] = pcrColl[i].forPos + 1;
+	j["ForEnd"] = pcrColl[i].forPos + pSeq[pcrColl[i].forId].size();
 	j["ForTm"] = pcrColl[i].forTemp;
 	j["ForName"] = pName[pcrColl[i].forId];
 	j["ForSeq"] = pSeq[pcrColl[i].forId];
-	j["RevPos"] = pcrColl[i].revPos;
+	j["RevPos"] = pcrColl[i].revPos + 1;
+	j["RevEnd"] = pcrColl[i].revPos + pSeq[pcrColl[i].revId].size();
 	j["RevTm"] = pcrColl[i].revTemp;
 	j["RevName"] = pName[pcrColl[i].revId];
 	j["RevSeq"] = pSeq[pcrColl[i].revId];
@@ -529,22 +532,17 @@ namespace dicey
 		AlignConfig<false, true> global;
 		TAlign align;
 		needle(genomicseq, searchSeq, align, global, sc);
-		std::string refalign = "";
-		std::string queryalign = "";
+		// Determine alignpos
 		bool leadGap = true;
 		for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
 		  if (align[1][j] != '-') leadGap = false;
-		  if (!leadGap) {
-		    refalign += align[0][j];
-		    queryalign += align[1][j];
-		  } else {
-		    ++alignpos;
-		  }
+		  if (leadGap) ++alignpos;
 		}
 		if (uphit.find(std::make_pair(refIndex, alignpos)) == uphit.end()) {
 		  // New hit
 		  uphit.insert(std::make_pair(refIndex, alignpos));
-		
+		  if (fwrvidx) chrpos = alignpos;
+		  else chrpos = alignpos - koffset;
 		  PrimerBind prim;
 		  prim.refIndex = refIndex;
 		  prim.temp = o.temp;
