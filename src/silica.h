@@ -266,9 +266,6 @@ namespace dicey
       return 1;
     }
 
-    // Open fasta index
-    faidx_t* fai = fai_load(c.genome.string().c_str());
-  
     // Reference index
     csa_wt<> fm_index;  
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
@@ -355,8 +352,8 @@ namespace dicey
     boost::progress_display show_progress( pSeq.size() );
     typedef std::vector<PrimerBind> TPrimerBinds;
     typedef std::vector<TPrimerBinds> TChrPrimerBinds;
-    TChrPrimerBinds forBind(faidx_nseq(fai), TPrimerBinds());
-    TChrPrimerBinds revBind(faidx_nseq(fai), TPrimerBinds());
+    TChrPrimerBinds forBind(nseq, TPrimerBinds());
+    TChrPrimerBinds revBind(nseq, TPrimerBinds());
     for(uint32_t primerId = 0; primerId < pSeq.size(); ++primerId) {
       // Thermodynamic calculation
       std::string forQuery = pSeq[primerId];
@@ -501,7 +498,7 @@ namespace dicey
 
     // Collect all primers
     TPrimerBinds allp;  
-    for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
+    for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
       allp.insert( allp.end(), forBind[refIndex].begin(), forBind[refIndex].end() );
       allp.insert( allp.end(), revBind[refIndex].begin(), revBind[refIndex].end() );
     }
@@ -510,6 +507,7 @@ namespace dicey
     std::sort(allp.begin(), allp.end(), SortPrimer<PrimerBind>());
     
     // Output primers
+    /*
     if (c.format == "json") primerJsonOut(c.primfile.string(), fai, allp, pName, pSeq);
     else if (c.format == "csv") primerCsvOut(c.primfile.string(), fai, allp, pName, pSeq);
     else if (c.format == "jsoncsv") {
@@ -517,14 +515,13 @@ namespace dicey
       primerCsvOut(c.primfile.string() + ".csv", fai, allp, pName, pSeq);
     }
     else primerTxtOut(c.primfile.string(), fai, allp, pName, pSeq);
+    */
     
     if (!c.pruneprimer) {
       // Find PCR products
-      boost::progress_display sp( faidx_nseq(fai) );
       typedef std::vector<PcrProduct> TPcrProducts;
       TPcrProducts pcrColl;
-      for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
-	++sp;
+      for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
 	for(TPrimerBinds::iterator fw = forBind[refIndex].begin(); fw != forBind[refIndex].end(); ++fw) {
 	  for(TPrimerBinds::iterator rv = revBind[refIndex].begin(); rv != revBind[refIndex].end(); ++rv) {
 	    if ((rv->pos > fw->pos) && (rv->pos - fw->pos < c.maxProdSize)) {
@@ -548,13 +545,14 @@ namespace dicey
 	      if ((c.cutofPen < 0) || (pen < c.cutofPen)) pcrColl.push_back(pcrProd);
 	    }
 	  }
-      }
+	}
       }
       
       // Sort by penalty
       std::sort(pcrColl.begin(), pcrColl.end(), SortProducts<PcrProduct>());
       
       // Output amplicons
+      /*
       if (c.format == "json") ampliconJsonOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
       else if (c.format == "csv") ampliconCsvOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
       else if (c.format == "jsoncsv") {
@@ -562,11 +560,11 @@ namespace dicey
       ampliconCsvOut(c.outfile.string() + ".csv", fai, pcrColl, pName, pSeq);
       }
       else ampliconTxtOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
+      */
     }
     
     // Clean-up
     primer3thal::destroy_thal_structures();
-    if (fai != NULL) fai_destroy(fai);
     
     return 0;
   }
