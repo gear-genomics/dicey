@@ -190,6 +190,7 @@ namespace dicey
 	j["RevTm"] = pcrColl[i].revTemp;
 	j["RevName"] = pName[pcrColl[i].revId];
 	j["RevSeq"] = pSeq[pcrColl[i].revId];
+	rcfile << j.dump();
 	//int32_t sl = -1;
 	//char* seq = faidx_fetch_seq(fai, chrom.c_str(), it->forPos, it->revPos, &sl);
 	//std::string seqstr = boost::to_upper_copy(std::string(seq));
