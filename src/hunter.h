@@ -145,6 +145,7 @@ namespace dicey
       rcfile << ",\"meta\":";
       nlohmann::json meta;
       meta["version"] = diceyVersionNumber;
+      meta["subcommand"] = "hunt";
       meta["distance"] = c.distance;
       meta["sequence"] = c.sequence;
       meta["genome"] = c.genome.string();

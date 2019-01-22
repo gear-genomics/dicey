@@ -95,7 +95,6 @@ namespace dicey
     bool onFor;
     double temp;
     double perfTemp;
-    std::string genSeq;
   };
   
   template<typename TRecord>
@@ -126,10 +125,9 @@ namespace dicey
       }
     };
 
-
   template<typename TConfig, typename TStream>
   inline void
-  writeJsonPrimerOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<PrimerBind> const& allp, std::vector<std::string> const& pName, std::vector<std::string> const& pSeq, std::vector<std::string> const& msg) {
+  writeJsonPrimerOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<PrimerBind> const& allp, std::vector<PcrProduct> const& pcrColl, std::vector<std::string> const& pName, std::vector<std::string> const& pSeq, std::vector<std::string> const& msg) {
     bool errors = false;
     rcfile << "{";
     // Errors
@@ -152,6 +150,7 @@ namespace dicey
       rcfile << ",\"meta\":";
       nlohmann::json meta;
       meta["version"] = diceyVersionNumber;
+      meta["subcommand"] = "search";
       meta["distance"] = c.distance;
       meta["genome"] = c.genome.string();
       meta["outfile"] = c.outfile.string();
@@ -159,29 +158,46 @@ namespace dicey
       meta["hamming"] = (!c.indel);
       rcfile << meta.dump() << ',';
 
-
-      uint32_t oldchr = 999999;
-      uint32_t oldstart = 0;
-      rcfile << "\"data\":[";
-      /*
-      for(uint32_t i = 0; i < ht.size(); ++i) {
-	if ((oldchr != ht[i].chr) || (oldstart != ht[i].start)) {
-	  if (i>0) rcfile << ',';
-	  nlohmann::json j;
-	  j["distance"] = std::abs(ht[i].score);
-	  j["chr"] = qn[ht[i].chr];
-	  j["start"] = ht[i].start;
-	  j["end"] = ht[i].start + _nucleotideLength(ht[i].refalign) - 1;
-	  j["strand"] = std::string(1, ht[i].strand);
-	  j["refalign"] = ht[i].refalign;
-	  j["queryalign"] = ht[i].queryalign;
-	  rcfile << j.dump();
-	}
-	oldchr = ht[i].chr;
-	oldstart = ht[i].start;
+      rcfile << "\"data\":{";
+      rcfile << "\"primers\":[";
+      for(uint32_t i = 0; i < allp.size(); ++i) {
+	if (i>0) rcfile << ',';
+	nlohmann::json j;
+	j["Chrom"] = qn[allp[i].refIndex];
+	j["Id"] = i;
+	j["Tm"] = allp[i].temp;
+	j["Pos"] = allp[i].pos;
+	if (allp[i].onFor) j["Ori"] = "forward";
+	else j["Ori"] = "reverse";
+	j["Name"] = pName[allp[i].primerId];
+	j["MatchTm"] = allp[i].perfTemp;
+	j["Seq"] = pSeq[allp[i].primerId];
+	rcfile << j.dump();
       }
-      */
-      rcfile << ']';
+      rcfile << "],";
+      rcfile << "\"amplicons\":[";
+      for(uint32_t i = 0; i < pcrColl.size(); ++i) {
+	if (i>0) rcfile << ',';
+	nlohmann::json j;
+	j["Chrom"] = qn[pcrColl[i].refIndex];
+	j["Id"] = i;
+	j["Length"] = pcrColl[i].leng;
+	j["Penalty"] = pcrColl[i].penalty;
+	j["ForPos"] = pcrColl[i].forPos;
+	j["ForTm"] = pcrColl[i].forTemp;
+	j["ForName"] = pName[pcrColl[i].forId];
+	j["ForSeq"] = pSeq[pcrColl[i].forId];
+	j["RevPos"] = pcrColl[i].revPos;
+	j["RevTm"] = pcrColl[i].revTemp;
+	j["RevName"] = pName[pcrColl[i].revId];
+	j["RevSeq"] = pSeq[pcrColl[i].revId];
+	//int32_t sl = -1;
+	//char* seq = faidx_fetch_seq(fai, chrom.c_str(), it->forPos, it->revPos, &sl);
+	//std::string seqstr = boost::to_upper_copy(std::string(seq));
+	//rfile << "\"Seq\": \"" << seqstr << "\"}";
+	//free(seq);
+      }
+      rcfile << "]}";
     }
     rcfile << '}' << std::endl;
   }
@@ -189,18 +205,21 @@ namespace dicey
   
   template<typename TConfig>
   inline void
-  jsonPrimerOut(TConfig const& c, std::vector<std::string> const& seqname, std::vector<PrimerBind> const& allp, std::vector<std::string> const& pName, std::vector<std::string> const& pSeq, std::vector<std::string> const& msg) {
+  jsonPrimerOut(TConfig const& c, std::vector<std::string> const& seqname, std::vector<PrimerBind> const& allp, std::vector<PcrProduct> const& pcrColl, std::vector<std::string> const& pName, std::vector<std::string> const& pSeq, std::vector<std::string> const& msg) {
     if (c.hasOutfile) {
       // Output file
       boost::iostreams::filtering_ostream rcfile;
       rcfile.push(boost::iostreams::gzip_compressor());
       rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
-      writeJsonPrimerOut(c, rcfile, seqname, allp, pName, pSeq, msg);
+      writeJsonPrimerOut(c, rcfile, seqname, allp, pcrColl, pName, pSeq, msg);
       rcfile.pop();
     } else {
-      writeJsonPrimerOut(c, std::cout, seqname, allp, pName, pSeq, msg);
+      writeJsonPrimerOut(c, std::cout, seqname, allp, pcrColl, pName, pSeq, msg);
     }
   }
+  
+
+
   
   int silica(int argc, char** argv) {
     SilicaConfig c;
@@ -276,7 +295,9 @@ namespace dicey
 
     // DNA Hits
     typedef std::vector<PrimerBind> TPrimerBinds;
-    TPrimerBinds allp;  
+    TPrimerBinds allp;
+    typedef std::vector<PcrProduct> TPcrProducts;
+    TPcrProducts pcrColl;
     std::vector<std::string> msg;
     std::vector<uint32_t> seqlen;
     std::vector<std::string> seqname;
@@ -288,14 +309,14 @@ namespace dicey
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
       msg.push_back("Error: Genome does not exist!");
-      jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
     }
     
     // Initialize thal arguments
     if (!boost::filesystem::exists(c.primer3Config)) {
       msg.push_back("Error: Cannot find primer3 config directory!");
-      jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
     }
     primer3thal::thal_args a;
@@ -324,7 +345,7 @@ namespace dicey
     uint32_t nseq = getSeqLenName(c, seqlen, seqname);
     if (!nseq) {
       msg.push_back("Error: Could not retrieve sequence lengths!");
-      jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
     }
 
@@ -334,14 +355,14 @@ namespace dicey
     std::string index_file = op.string() + ".fm9";
     if (!load_from_file(fm_index, index_file)) {
       msg.push_back("Error: FM-Index cannot be loaded!");
-      jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
     }
     
     // Parse input fasta
     if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
       msg.push_back("Error: Input fasta file is missing!");
-      jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
     }
     std::ifstream fafile(c.infile.string().c_str());
@@ -360,7 +381,7 @@ namespace dicey
 		  std::string inseq = replaceNonDna(tmpfasta, msg);
 		  if ((inseq.size() < 10) || (inseq.size() < c.kmer)) {
 		    msg.push_back("Error: Input sequence is shorter than 10 nucleotides or shorter than the selected k-mer length!");
-		    jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+		    jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
 		    return 1;
 		  }
 		  if (c.distance >= inseq.size()) {
@@ -387,7 +408,7 @@ namespace dicey
 	    std::string inseq = replaceNonDna(tmpfasta, msg);
 	    if ((inseq.size() < 10) || (inseq.size() < c.kmer)) {
 	      msg.push_back("Error: Input sequence is shorter than 10 nucleotides or shorter than the selected k-mer length!");
-	      jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+	      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
 	      return 1;
 	    }
 	    if (c.distance >= inseq.size()) {
@@ -421,7 +442,7 @@ namespace dicey
       bool thalsuccess1 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oi);
       if ((!thalsuccess1) || (oi.temp == primer3thal::THAL_ERROR_SCORE)) {
 	msg.push_back("Error: Thermodynamical calculation failed!");
-	jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+	jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
 	return 1;
       }
       double matchTemp = oi.temp;
@@ -495,7 +516,7 @@ namespace dicey
 	      bool thalsuccess = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &o);
 	      if ((!thalsuccess) || (o.temp == primer3thal::THAL_ERROR_SCORE)) {
 		msg.push_back("Error: Thermodynamical calculation failed!");
-		jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
+		jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
 		return 1;
 	      }
 
@@ -529,7 +550,6 @@ namespace dicey
 		  prim.temp = o.temp;
 		  prim.perfTemp = matchTemp;
 		  prim.primerId = primerId;
-		  prim.genSeq = genomicseq;
 		  if (fwrvidx) {
 		    prim.onFor = false;
 		    prim.pos = chrpos;
@@ -561,13 +581,9 @@ namespace dicey
     // Sort by temperature
     std::sort(allp.begin(), allp.end(), SortPrimer<PrimerBind>());
     
-    // Output primers
-    jsonPrimerOut(c, seqname, allp, pName, pSeq, msg);
-
-    if (!c.pruneprimer) {
-      // Find PCR products
-      typedef std::vector<PcrProduct> TPcrProducts;
-      TPcrProducts pcrColl;
+    // Search PCR amplicons
+    if (c.pruneprimer) jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
+    else {
       for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
 	for(TPrimerBinds::iterator fw = forBind[refIndex].begin(); fw != forBind[refIndex].end(); ++fw) {
 	  for(TPrimerBinds::iterator rv = revBind[refIndex].begin(); rv != revBind[refIndex].end(); ++rv) {
@@ -599,15 +615,7 @@ namespace dicey
       std::sort(pcrColl.begin(), pcrColl.end(), SortProducts<PcrProduct>());
       
       // Output amplicons
-      /*
-      if (c.format == "json") ampliconJsonOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
-      else if (c.format == "csv") ampliconCsvOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
-      else if (c.format == "jsoncsv") {
-	ampliconJsonOut(c.outfile.string() + ".json", fai, pcrColl, pName, pSeq);
-      ampliconCsvOut(c.outfile.string() + ".csv", fai, pcrColl, pName, pSeq);
-      }
-      else ampliconTxtOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
-      */
+      jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
     }
     
     // Clean-up
