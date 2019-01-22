@@ -61,6 +61,8 @@ namespace dicey
   struct SilicaConfig {
     bool indel;
     bool pruneprimer;
+    bool hasOutfile;
+    
     double cutTemp;
     uint32_t maxProdSize;
     double cutofPen;
@@ -70,7 +72,7 @@ namespace dicey
     uint32_t kmer;
     uint32_t distance;
     uint32_t maxNeighborhood;
-
+    uint32_t maxPruneCount;
     // Primer3
     double temp;
     double mv;
@@ -126,21 +128,20 @@ namespace dicey
       }
     };
   
-  template<typename TPrimerBinds>
-    inline void
-    addUnique(TPrimerBinds& coll, PrimerBind& prim, uint32_t const distance) {
-    uint32_t idx = 0;
-    for(typename TPrimerBinds::iterator it = coll.begin(); it != coll.end(); ++it, ++idx) {
-      if ((prim.primerId == it->primerId) && (prim.pos + 2*distance >= it->pos) && (prim.pos <= it->pos + 2*distance)) {
-	// Duplicate, find best temp
-	if (prim.temp > it->temp) coll[idx] = prim;
-	return;
-      }
+  template<typename TConfig>
+  inline void
+  jsonPrimerOut(TConfig const& c, std::vector<std::string> const& qn, std::vector<DnaHit> const& ht, std::vector<std::string> const& msg) {
+    if (c.hasOutfile) {
+      // Output file
+      boost::iostreams::filtering_ostream rcfile;
+      rcfile.push(boost::iostreams::gzip_compressor());
+      rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+      //writeJsonDnaHitOut(c, rcfile, qn, ht, msg);
+      rcfile.pop();
+    } else {
+      //writeJsonDnaHitOut(c, std::cout, qn, ht, msg);
     }
-    // No other primer found
-    coll.push_back(prim);
   }
-  
   
   int silica(int argc, char** argv) {
     SilicaConfig c;
@@ -151,7 +152,7 @@ namespace dicey
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
-      ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("amplicons.txt"), "amplicon output file")
+      ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile), "amplicon output file")
       ("primer,p", boost::program_options::value<boost::filesystem::path>(&c.primfile)->default_value("primers.txt"), "primer locations file")
       ("format,f", boost::program_options::value<std::string>(&c.format)->default_value("txt"), "output format (json, txt, csv or jsoncsv)")
       ;
@@ -161,8 +162,8 @@ namespace dicey
       ("kmer,k", boost::program_options::value<uint32_t>(&c.kmer)->default_value(15), "k-mer size")
       ("maxmatches,m", boost::program_options::value<std::size_t>(&c.max_locations)->default_value(10000), "max. number of matches per k-mer")
       ("maxNeighborhood,x", boost::program_options::value<uint32_t>(&c.maxNeighborhood)->default_value(10000), "max. neighborhood size")
-      ("pruneprimer,q", "prune primers with more than maxmatches") 
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
+      ("pruneprimer,q", boost::program_options::value<uint32_t>(&c.maxPruneCount), "prune primer threshold")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
     ;
     
@@ -211,12 +212,28 @@ namespace dicey
     // Cmd switches
     if (!vm.count("hamming")) c.indel = true;
     else c.indel = false;
+    if (vm.count("outfile")) c.hasOutfile = true;
+    else c.hasOutfile = false;
     if (vm.count("pruneprimer")) c.pruneprimer = true;
     else c.pruneprimer = false;
 
+    // DNA Hits
+    std::vector<DnaHit> ht;
+    std::vector<std::string> msg;
+    std::vector<uint32_t> seqlen;
+    std::vector<std::string> seqname;
+
+    // Check genome
+    if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
+      msg.push_back("Error: Genome does not exist!");
+      jsonPrimerOut(c, seqname, ht, msg);
+      return 1;
+    }
+    
     // Initialize thal arguments
     if (!boost::filesystem::exists(c.primer3Config)) {
-      std::cerr << "Cannot find primer3 config directory: " << c.primer3Config.string() << std::endl;
+      msg.push_back("Error: Cannot find primer3 config directory!");
+      jsonPrimerOut(c, seqname, ht, msg);
       return 1;
     }
     primer3thal::thal_args a;
@@ -231,8 +248,8 @@ namespace dicey
     a.dntp = c.dntp;
     
     // Set prefix and suffix based on edit distance
-    c.pre_context = 2;
-    c.post_context = 2;
+    c.pre_context = 0;
+    c.post_context = 0;
     if (c.indel) {
       c.pre_context += c.distance;
       c.post_context += c.distance;
@@ -241,22 +258,11 @@ namespace dicey
     // Fix provided Temperature
     a.temp += primer3thal::ABSOLUTE_ZERO;
     
-    // Show cmd
-    boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] ";
-    std::cout << "dicey ";
-    for(int i=0; i<argc; ++i) { std::cout << argv[i] << ' '; }
-    std::cout << std::endl;
-    
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Parse chromosomes" << std::endl;
-    
     // Parse chromosome lengths
-    std::vector<uint32_t> seqlen;
-    std::vector<std::string> seqname;
     uint32_t nseq = getSeqLenName(c, seqlen, seqname);
     if (!nseq) {
-      std::cerr << "Could not retrieve sequence lengths!" << std::endl;
+      msg.push_back("Error: Could not retrieve sequence lengths!");
+      jsonPrimerOut(c, seqname, ht, msg);
       return 1;
     }
 
@@ -265,24 +271,18 @@ namespace dicey
   
     // Reference index
     csa_wt<> fm_index;  
-    
-    // Load FM index
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
     std::string index_file = op.string() + ".fm9";
-    
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Load FM-Index" << std::endl;
     if (!load_from_file(fm_index, index_file)) {
-      std::cerr << "Index cannot be loaded!" << std::endl;
+      msg.push_back("Error: FM-Index cannot be loaded!");
+      jsonPrimerOut(c, seqname, ht, msg);
       return 1;
     }
     
     // Parse input fasta
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Parse input FASTA" << std::endl;
-    
     if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
-      std::cerr << "Input fasta file is missing: " << c.infile.string() << std::endl;
+      msg.push_back("Error: Input fasta file is missing!");
+      jsonPrimerOut(c, seqname, ht, msg);
       return 1;
     }
     typedef std::vector<std::string> TPrimerName;
@@ -298,20 +298,23 @@ namespace dicey
 	if (!line.empty()) {
 	  if (line[0] == '>') {
 	    if ((!fan.empty()) && (!tmpfasta.empty()) && (tmpfasta.size() > c.kmer)) {
-	      if (c.pruneprimer) {
-		std::string qr = tmpfasta.substr(tmpfasta.size() - c.kmer);
-		std::size_t occs = sdsl::count(fm_index, qr.begin(), qr.end());
-		if (occs <= c.max_locations) {
-		  reverseComplement(qr);
-		  occs = sdsl::count(fm_index, qr.begin(), qr.end());
-		  if (occs <= c.max_locations) {
-		    pName.push_back(fan);
-		    pSeq.push_back(tmpfasta);
+	      std::string qr = tmpfasta.substr(tmpfasta.size() - c.kmer);
+	      if ((!c.pruneprimer) || (sdsl::count(fm_index, qr.begin(), qr.end()) <= c.maxPruneCount)) {
+		reverseComplement(qr);
+		if ((!c.pruneprimer) || (sdsl::count(fm_index, qr.begin(), qr.end()) <= c.maxPruneCount)) {
+		  std::string inseq = replaceNonDna(tmpfasta, msg);
+		  if ((inseq.size() < 10) || (inseq.size() < c.kmer)) {
+		    msg.push_back("Error: Input sequence is shorter than 10 nucleotides or shorter than the selected k-mer length!");
+		    jsonPrimerOut(c, seqname, ht, msg);
+		    return 1;
 		  }
+		  if (c.distance >= inseq.size()) {
+		    c.distance = inseq.size() - 1;
+		    msg.push_back("Warning: Distance was adjusted to sequence length!");
+		  }
+		  pName.push_back(fan);
+		  pSeq.push_back(inseq);
 		}
-	      } else {
-		pName.push_back(fan);
-		pSeq.push_back(tmpfasta);
 	      }
 	      tmpfasta = "";
 	    }
@@ -322,20 +325,23 @@ namespace dicey
 	}
       }
       if ((!fan.empty()) && (!tmpfasta.empty()) && (tmpfasta.size() > c.kmer)) {
-	if (c.pruneprimer) {
-	  std::string qr = tmpfasta.substr(tmpfasta.size() - c.kmer);
-	  std::size_t occs = sdsl::count(fm_index, qr.begin(), qr.end());
-	  if (occs <= c.max_locations) {
-	    reverseComplement(qr);
-	    occs = sdsl::count(fm_index, qr.begin(), qr.end());
-	    if (occs <= c.max_locations) {
-	      pName.push_back(fan);
-	      pSeq.push_back(tmpfasta);
+	std::string qr = tmpfasta.substr(tmpfasta.size() - c.kmer);
+	if ((!c.pruneprimer) || (sdsl::count(fm_index, qr.begin(), qr.end()) <= c.maxPruneCount)) {
+	  reverseComplement(qr);
+	  if ((!c.pruneprimer) || (sdsl::count(fm_index, qr.begin(), qr.end()) <= c.maxPruneCount)) {
+	    std::string inseq = replaceNonDna(tmpfasta, msg);
+	    if ((inseq.size() < 10) || (inseq.size() < c.kmer)) {
+	      msg.push_back("Error: Input sequence is shorter than 10 nucleotides or shorter than the selected k-mer length!");
+	      jsonPrimerOut(c, seqname, ht, msg);
+	      return 1;
 	    }
+	    if (c.distance >= inseq.size()) {
+	      c.distance = inseq.size() - 1;
+	      msg.push_back("Warning: Distance was adjusted to sequence length!");
+	    }
+	    pName.push_back(fan);
+	    pSeq.push_back(inseq);
 	  }
-	} else {
-	  pName.push_back(fan);
-	  pSeq.push_back(tmpfasta);
 	}
       }
     }
@@ -346,73 +352,73 @@ namespace dicey
     TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
     
     // Query FM-Index
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Query FM-Index" << std::endl;
     boost::progress_display show_progress( pSeq.size() );
     typedef std::vector<PrimerBind> TPrimerBinds;
     typedef std::vector<TPrimerBinds> TChrPrimerBinds;
     TChrPrimerBinds forBind(faidx_nseq(fai), TPrimerBinds());
     TChrPrimerBinds revBind(faidx_nseq(fai), TPrimerBinds());
     for(uint32_t primerId = 0; primerId < pSeq.size(); ++primerId) {
-      std::string qr = pSeq[primerId];
-      if (qr.size() < c.kmer) continue;
-      int32_t koffset = qr.size() - c.kmer;
-      qr = qr.substr(qr.size() - c.kmer);
+      // Thermodynamic calculation
+      std::string forQuery = pSeq[primerId];
+      std::string revQuery = pSeq[primerId];
+      reverseComplement(revQuery);
+      primer3thal::oligo1 = (unsigned char*) forQuery.c_str();
+      primer3thal::oligo2 = (unsigned char*) revQuery.c_str();
+      primer3thal::thal_results oi;
+      bool thalsuccess1 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oi);
+      if ((!thalsuccess1) || (oi.temp == primer3thal::THAL_ERROR_SCORE)) {
+	msg.push_back("Error: Thermodynamical calculation failed!");
+	jsonPrimerOut(c, seqname, ht, msg);
+	return 1;
+      }
+      double matchTemp = oi.temp;
+
+      // Enumerate neighbors
       typedef std::set<std::string> TStringSet;
-      TStringSet fwdset;
-      neighbors(qr, alphabet, c.distance, c.indel, c.maxNeighborhood, fwdset);
-      // Debug
-      //for(TStringSet::iterator it = fwdset.begin(); it != fwdset.end(); ++it) std::cerr << *it << std::endl;
-      TStringSet revset;
-      reverseComplement(qr);
-      neighbors(qr, alphabet, c.distance, c.indel, c.maxNeighborhood, revset);
-      int32_t qhits = 0;
-      for(int32_t fwdrev = 0; fwdrev < 2; ++fwdrev) {
-	TStringSet::iterator its;
-	TStringSet::iterator itsEnd;
-	if (fwdrev == 0) {
-	  its = fwdset.begin();
-	  itsEnd = fwdset.end();
-	} else {
-	  its = revset.begin();
-	  itsEnd = revset.end();
-	}
-	for(; its != itsEnd; ++its, ++qhits) {
-	  std::string query(*its);
-	  std::string forQuery = pSeq[primerId];
-	  std::string revQuery = pSeq[primerId];
-	  reverseComplement(revQuery);
-	  primer3thal::oligo1 = (unsigned char*) forQuery.c_str();
-	  primer3thal::oligo2 = (unsigned char*) revQuery.c_str();
-	  primer3thal::thal_results oi;
-	  bool thalsuccess1 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oi);
-	  if ((!thalsuccess1) || (oi.temp == primer3thal::THAL_ERROR_SCORE)) {
-	    std::cerr << "Error during thermodynamical calculation!" << std::endl;
-	    return -1;
-	  }
-	  double matchTemp = oi.temp;
+      typedef std::vector<TStringSet> TFwdRevSearchSets;
+      TFwdRevSearchSets fwrv(2, TStringSet());
+      std::string sequence = pSeq[primerId];
+      int32_t koffset = sequence.size() - c.kmer;
+      sequence = sequence.substr(sequence.size() - c.kmer);
+      neighbors(sequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[0]);
+      std::string revSequence = sequence;
+      reverseComplement(revSequence);
+      neighbors(revSequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[1]);
+      if ((fwrv[0].size() >= c.maxNeighborhood) || (fwrv[1].size() >= c.maxNeighborhood)) {
+	std::string m = "Warning: Neighborhood size exceeds " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " candidates. Only first " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " neighbors are searched, results are likely incomplete!";
+	msg.push_back(m);
+      }
+
+      // Serach
+      uint32_t hits = 0;
+      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+	typedef std::pair<uint32_t, uint32_t> TRefPosPair;
+	typedef std::set<TRefPosPair> TUniquePrimerHits;
+	TUniquePrimerHits uphit;
+	for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
+	  std::string query = *it;
 	  std::size_t m = query.size();
 	  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
 	  if (occs > 0) {
 	    auto locations = locate(fm_index, query.begin(), query.begin() + m);
 	    std::sort(locations.begin(), locations.end());
-	    std::size_t pre_extract = c.pre_context;
-	    std::size_t post_extract = c.post_context;
-	    if (fwdrev == 0) pre_extract += koffset;
-	    else post_extract += koffset;
-	    for(std::size_t i = 0; i < std::min(occs, c.max_locations); ++i) {
+	    for(std::size_t i = 0; ((i < std::min(occs, c.max_locations)) && (hits < c.max_locations)); ++i) {
 	      int64_t bestPos = locations[i];
 	      int64_t cumsum = 0;
 	      uint32_t refIndex = 0;
 	      for(; bestPos >= cumsum + seqlen[refIndex]; ++refIndex) cumsum += seqlen[refIndex];
-	      uint32_t chrpos = bestPos - cumsum;
+	      uint32_t chrpos = bestPos - cumsum;	      		      
+	      std::size_t pre_extract = c.pre_context;
+	      std::size_t post_extract = c.post_context;
+	      if (fwrvidx) post_extract += koffset;
+	      else pre_extract += koffset;
 	      if (pre_extract > locations[i]) {
 		pre_extract = locations[i];
 	      }
 	      if (locations[i]+m+post_extract > fm_index.size()) {
 		post_extract = fm_index.size() - locations[i] - m;
 	      }
-	      auto s = extract(fm_index, locations[i]-pre_extract, locations[i]+m+post_extract-1);
+	      auto s = extract(fm_index, locations[i] - pre_extract, locations[i] + m + post_extract - 1);
 	      std::string pre = s.substr(0, pre_extract);
 	      s = s.substr(pre_extract);
 	      if (pre.find_last_of('\n') != std::string::npos) {
@@ -421,51 +427,76 @@ namespace dicey
 	      std::string post = s.substr(m);
 	      post = post.substr(0, post.find_first_of('\n'));
 	      
-	      // thermodynamical alignemnt
+	      // Thermodynamic calculation
 	      std::string genomicseq = pre + s.substr(0, m) + post;
-	      std::string primer = pSeq[primerId];
-	      if (fwdrev == 0) reverseComplement(primer);
+	      if (pre.size() < chrpos) chrpos -= pre.size();	      
+	      std::string primer = revQuery;
+	      std::string searchSeq = sequence;
+	      if (fwrvidx) {
+		primer = forQuery;
+		searchSeq = revSequence;
+	      }
 	      primer3thal::oligo1 = (unsigned char*) primer.c_str();
 	      primer3thal::oligo2 = (unsigned char*) genomicseq.c_str();
 	      primer3thal::thal_results o;
 	      bool thalsuccess = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &o);
 	      if ((!thalsuccess) || (o.temp == primer3thal::THAL_ERROR_SCORE)) {
-		std::cerr << "Error during thermodynamical calculation!" << std::endl;
-		return -1;
+		msg.push_back("Error: Thermodynamical calculation failed!");
+		jsonPrimerOut(c, seqname, ht, msg);
+		return 1;
 	      }
-	      
-	      // Score suitable primers
+
+	      // Suitable match?
 	      if (o.temp > c.cutTemp) {
-		PrimerBind prim;
-		prim.refIndex = refIndex;
-		prim.temp = o.temp;
-		prim.perfTemp = matchTemp;
-		prim.primerId = primerId;
-		prim.genSeq = genomicseq;
-		if (fwdrev == 0) {
-		  prim.onFor = true;
-		  prim.pos = chrpos - koffset;
-		  if (c.indel) {
-		    prim.pos -= c.distance;
-		    addUnique(forBind[refIndex], prim, c.distance);
-		  } else forBind[refIndex].push_back(prim);
-		} else {
-		  prim.onFor = false;
-		  prim.pos = chrpos + pSeq[primerId].size();
-		  if (c.indel) {
-		    prim.pos += c.distance;
-		    addUnique(revBind[refIndex], prim, c.distance);
-		  } else revBind[refIndex].push_back(prim);
+		// Based on search sequence we can define the unique starting position to remove duplicates
+		uint32_t alignpos = chrpos;
+		DnaScore<int32_t> sc(0, -1, -1, -1);
+		typedef boost::multi_array<char, 2> TAlign;
+		AlignConfig<false, true> global;
+		TAlign align;
+		needle(genomicseq, searchSeq, align, global, sc);
+		std::string refalign = "";
+		std::string queryalign = "";
+		bool leadGap = true;
+		for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
+		  if (align[1][j] != '-') leadGap = false;
+		  if (!leadGap) {
+		    refalign += align[0][j];
+		    queryalign += align[1][j];
+		  } else {
+		    ++alignpos;
+		  }
+		}
+		if (uphit.find(std::make_pair(refIndex, alignpos)) == uphit.end()) {
+		  // New hit
+		  uphit.insert(std::make_pair(refIndex, alignpos));
+		
+		  PrimerBind prim;
+		  prim.refIndex = refIndex;
+		  prim.temp = o.temp;
+		  prim.perfTemp = matchTemp;
+		  prim.primerId = primerId;
+		  prim.genSeq = genomicseq;
+		  if (fwrvidx) {
+		    prim.onFor = false;
+		    prim.pos = chrpos;
+		    revBind[refIndex].push_back(prim);
+		  } else {
+		    prim.onFor = true;
+		    prim.pos = chrpos;
+		    forBind[refIndex].push_back(prim);
+		  }
 		}
 	      }
-	      
-	      // Debug alignment output
-	      //_debugAlignment(pSeq[primerId], genomicseq, fwdrev);
+	      ++hits;
 	    }
 	  }
 	}
       }
-      ++show_progress;
+      if (hits >= c.max_locations) {
+	std::string m = "Warning: More than " + boost::lexical_cast<std::string>(c.max_locations) + " matches found. Only first " + boost::lexical_cast<std::string>(c.max_locations) + " matches are reported, results are likely incomplete!";
+	msg.push_back(m);
+      }
     }
 
     // Collect all primers
@@ -489,8 +520,6 @@ namespace dicey
     
     if (!c.pruneprimer) {
       // Find PCR products
-      now = boost::posix_time::second_clock::local_time();
-      std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Find PCR Products" << std::endl;
       boost::progress_display sp( faidx_nseq(fai) );
       typedef std::vector<PcrProduct> TPcrProducts;
       TPcrProducts pcrColl;
@@ -526,8 +555,6 @@ namespace dicey
       std::sort(pcrColl.begin(), pcrColl.end(), SortProducts<PcrProduct>());
       
       // Output amplicons
-      now = boost::posix_time::second_clock::local_time();
-      std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Output Amplicons" << std::endl;
       if (c.format == "json") ampliconJsonOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
       else if (c.format == "csv") ampliconCsvOut(c.outfile.string(), fai, pcrColl, pName, pSeq);
       else if (c.format == "jsoncsv") {
@@ -541,10 +568,6 @@ namespace dicey
     primer3thal::destroy_thal_structures();
     if (fai != NULL) fai_destroy(fai);
     
-    // Done
-    now = boost::posix_time::second_clock::local_time();
-    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Done." << std::endl;
-
     return 0;
   }
 

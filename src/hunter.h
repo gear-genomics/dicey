@@ -294,7 +294,7 @@ namespace dicey
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
     std::string index_file = op.string() + ".fm9";
     if (!load_from_file(fm_index, index_file)) {
-      msg.push_back("Error: Fasta index cannot be loaded!");
+      msg.push_back("Error: FM-Index cannot be loaded!");
       jsonDnaHitOut(c, seqname, ht, msg);
       return 1;
     }
