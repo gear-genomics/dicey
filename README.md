@@ -36,3 +36,19 @@ You can also redirect the output in JSON format to a file.
 `./src/dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
 
 
+## In-silico PCR for a set of primers
+
+Dicey can search for multiple primer pairs, show off-target products and determine PCR amplicons.
+
+`echo -e ">FGA_f\nGCCCCATAGGTTTTGAACTCA\n>FGA_r\nTGATTTGTCTGTAATTGCCAGC" > primers.fa`
+
+`./src/dicey search -g hg19.fa.gz primers.fa | python scripts/json2txt.py`
+
+The default output is a JSON file that can also be stored in a file.
+
+`./src/dicey search -o out.json.gz -g hg19.fa.gz primers.fa`
+
+
+## Questions
+
+In case of questions feel free to send us an [email](https://www-db.embl.de/EMBLPersonGroup-PersonPicture/MailForm/?recipient=ggenomics).

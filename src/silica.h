@@ -241,7 +241,7 @@ namespace dicey
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
-      ("output,o", boost::program_options::value<boost::filesystem::path>(&c.outfile), "output file")
+      ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile), "output file")
       ;
 
     boost::program_options::options_description appr("Approximate Search Options");
