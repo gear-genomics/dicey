@@ -51,6 +51,15 @@ The default output is a JSON file that can also be stored in a file.
 `dicey search -o out.json.gz -g hg19.fa.gz primers.fa`
 
 
+## FAQ
+
+* Dicey cannot find the primer3 config directory    
+The primer3 config directory is included in the repository. Just clone the repository `git clone https://github.com/gear-genomics/dicey.git` and then use the cloned config directory `dicey search -i dicey/src/primer3_config/ -g hg19.fa.gz primers.fa`.
+
+* The script json2txt.py is not found     
+The json2txt.py python script is included in the repository. Just clone the repository `git clone https://github.com/gear-genomics/dicey.git` and then you will find the script in the `./scripts/` subdirectory.
+
+
 ## Questions
 
 In case of questions feel free to send us an [email](https://www-db.embl.de/EMBLPersonGroup-PersonPicture/MailForm/?recipient=ggenomics).
