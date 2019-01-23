@@ -1,20 +1,22 @@
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/dicey/README.html)
 [![Build Status](https://travis-ci.org/gear-genomics/dicey.svg?branch=master)](https://travis-ci.org/gear-genomics/dicey)
 [![GitHub license](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://raw.githubusercontent.com/gear-genomics/dicey/master/LICENSE)
 [![GitHub Releases](https://img.shields.io/github/release/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/releases)
 [![GitHub Issues](https://img.shields.io/github/issues/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/issues)
 
-# dicey
+# Installing dicey
 
-In-silico PCR and variant primer design
+The easiest way to get Dicey is to download a statically linked binary from the [Dicey release page](https://github.com/gear-genomics/dicey/releases) or to download Dicey from [Bioconda](https://anaconda.org/bioconda/dicey). Building from source is also possible:
 
+`apt-get install -y build-essential g++ cmake zlib1g-dev libbz2-dev liblzma-dev libboost-all-dev`
 
-## Installation from source
+`git clone --recursive https://github.com/gear-genomics/dicey.git`
 
-```bash
-git clone --recursive https://github.com/gear-genomics/dicey.git
-cd dicey/
-make
-```
+`cd dicey/`
+
+`make all`
+
+`make install`
 
 This will generate the binary `src/dicey`.
 
