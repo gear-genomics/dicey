@@ -44,11 +44,11 @@ Dicey can search for multiple primer pairs, show off-target products and determi
 
 `echo -e ">FGA_f\nGCCCCATAGGTTTTGAACTCA\n>FGA_r\nTGATTTGTCTGTAATTGCCAGC" > primers.fa`
 
-`dicey search -g hg19.fa.gz primers.fa | python scripts/json2txt.py`
+`dicey search -c 45 -g hg19.fa.gz primers.fa | python scripts/json2txt.py`
 
 The default output is a JSON file that can also be stored in a file.
 
-`dicey search -o out.json.gz -g hg19.fa.gz primers.fa`
+`dicey search -c 45 -o out.json.gz -g hg19.fa.gz primers.fa`
 
 
 ## FAQ
