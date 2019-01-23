@@ -18,24 +18,24 @@ The easiest way to get Dicey is to download a statically linked binary from the 
 
 `make install`
 
-This will generate the binary `src/dicey`.
+This will generate the binary `bin/dicey`.
 
 
 ## Sequence search in an indexed reference genome
 
 Searching a large reference genome requires a pre-built index on a bgzip compressed genome.
 
-`./src/dicey index -o hg19.fa.fm9 hg19.fa.gz`
+`dicey index -o hg19.fa.fm9 hg19.fa.gz`
 
 `samtools faidx hg19.fa.gz`
 
 The indexing step is only required once. You can then search nucleotide sequences at a user-defined edit or hamming distance.
 
-`./src/dicey hunt -g hg19.fa.gz TCTCTGCACACACGTTGT | python scripts/json2txt.py`
+`dicey hunt -g hg19.fa.gz TCTCTGCACACACGTTGT | python scripts/json2txt.py`
 
 You can also redirect the output in JSON format to a file.
 
-`./src/dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
+`dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
 
 
 ## In-silico PCR for a set of primers
@@ -44,11 +44,11 @@ Dicey can search for multiple primer pairs, show off-target products and determi
 
 `echo -e ">FGA_f\nGCCCCATAGGTTTTGAACTCA\n>FGA_r\nTGATTTGTCTGTAATTGCCAGC" > primers.fa`
 
-`./src/dicey search -g hg19.fa.gz primers.fa | python scripts/json2txt.py`
+`dicey search -g hg19.fa.gz primers.fa | python scripts/json2txt.py`
 
 The default output is a JSON file that can also be stored in a file.
 
-`./src/dicey search -o out.json.gz -g hg19.fa.gz primers.fa`
+`dicey search -o out.json.gz -g hg19.fa.gz primers.fa`
 
 
 ## Questions
