@@ -256,7 +256,7 @@ namespace dicey
     
     boost::program_options::options_description score("Parameters for Scoring and Penalty Calculation");
     score.add_options()
-      ("cutTemp,c", boost::program_options::value<double>(&c.cutTemp)->default_value(40.0), "min. primer melting temperature")
+      ("cutTemp,c", boost::program_options::value<double>(&c.cutTemp)->default_value(45.0), "min. primer melting temperature")
       ("maxProdSize,l", boost::program_options::value<uint32_t>(&c.maxProdSize)->default_value(15000), "max. PCR Product size")
       ("cutoffPenalty", boost::program_options::value<double>(&c.cutofPen)->default_value(-1.0), "max. penalty for products (-1 = keep all)")
       ("penaltyTmDiff", boost::program_options::value<double>(&c.penDiff)->default_value(0.6), "multiplication factor for deviation of primer Tm penalty")
@@ -609,7 +609,6 @@ namespace dicey
 	  for(TPrimerBinds::iterator rv = revBind[refIndex].begin(); rv != revBind[refIndex].end(); ++rv) {
 	    if ((rv->pos > fw->pos) && (rv->pos - fw->pos < c.maxProdSize)) {
 	      PcrProduct pcrProd;
-	      pcrProd.leng = rv->pos - fw->pos;
 	      pcrProd.refIndex = refIndex;
 	      pcrProd.forPos = fw->pos;
 	      pcrProd.forTemp = fw->temp;
@@ -617,6 +616,8 @@ namespace dicey
 	      pcrProd.revPos = rv->pos;
 	      pcrProd.revTemp = rv->temp;
 	      pcrProd.revId = rv->primerId;
+	      pcrProd.leng = (rv->pos + pSeq[pcrProd.revId].size()) - fw->pos;
+	      
 	      // Calculate Penalty
 	      double pen = (fw->perfTemp - fw->temp) * c.penDiff;
 	      if (pen < 0) pen = 0;
