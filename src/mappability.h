@@ -64,6 +64,8 @@ namespace dicey
     uint32_t maxNeighborhood;
     int32_t readlength;
     int32_t chrom;
+    int32_t chunkStart;
+    int32_t chunkEnd;
     boost::filesystem::path genome;
     boost::filesystem::path outfile;
   };
@@ -79,6 +81,8 @@ namespace dicey
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("map.fa.gz"), "gzipped output file")
       ("readlength,r", boost::program_options::value<int32_t>(&c.readlength)->default_value(51), "read length")
       ("chromosome,c", boost::program_options::value<int32_t>(&c.chrom)->default_value(-1), "chromosome index (-1: all)")
+      ("chunkStart,m", boost::program_options::value<int32_t>(&c.chunkStart)->default_value(-1), "chunk start (optional)")
+      ("chunkEnd,n", boost::program_options::value<int32_t>(&c.chunkEnd)->default_value(-1), "chunk end (optional)")
       ("maxEditDistance,e", boost::program_options::value<uint32_t>(&c.maxEditDistance)->default_value(1), "max. edit distance")
       ("maxNeighborhood,x", boost::program_options::value<uint32_t>(&c.maxNeighborhood)->default_value(10000), "max. neighborhood size")
       ;
@@ -156,12 +160,28 @@ namespace dicey
       if ((c.chrom != -1) && ((int32_t) refIndex != c.chrom)) {
 	idxpos += faidx_seq_len(fai, seqname.c_str()) + 1;
 	continue;
+      } else {
+	if ((c.chrom != -1) && ((int32_t) refIndex == c.chrom)) {
+	  // Fix chunk start and end
+	  if (c.chunkStart != -1) {
+	    int32_t chrlen = faidx_seq_len(fai, seqname.c_str());
+	    if (c.chunkStart < 0) c.chunkStart = 0;
+	    if (c.chunkStart >= chrlen) c.chunkStart = chrlen - 1;
+	    if (c.chunkEnd < 0) c.chunkEnd = 0;
+	    if (c.chunkEnd > chrlen) c.chunkEnd = chrlen;
+	    if (c.chunkEnd < c.chunkStart) c.chunkEnd = c.chunkStart + 1;
+	  }
+	}
       }
       int32_t seqlen = -1;
       char* seq = faidx_fetch_seq(fai, seqname.c_str(), 0, faidx_seq_len(fai, seqname.c_str()), &seqlen);
+      
       std::vector<char> oseq(seqlen, 'N');
 #pragma omp parallel for default(shared)
       for(int32_t pos = 0; pos < (seqlen - c.readlength + 1); ++pos) {
+	if (c.chunkStart != -1) {
+	  if ((pos + halfwin < c.chunkStart) || (pos + halfwin >= c.chunkEnd)) continue;
+	}
 	int64_t ipos = idxpos + pos;
 	std::string sequence = boost::to_upper_copy(std::string(seq + pos, seq + pos + c.readlength));
 	bool nContent = false;
@@ -225,9 +245,16 @@ namespace dicey
 	  else if (maxED > 2) oseq[pos+halfwin]='T';
 	}
       }
-      of << ">" << seqname << std::endl;
-      for(uint32_t i = 0; i<oseq.size(); ++i) of << oseq[i];
-      of << std::endl;
+      if (c.chunkStart != -1) {
+	if (c.chunkStart == 0) of << ">" << seqname << std::endl;
+	else of << ">chunk_" << seqname << ":" << c.chunkStart << "-" << c.chunkEnd << std::endl;
+	for(int32_t i = c.chunkStart; i<c.chunkEnd; ++i) of << oseq[i];
+	of << std::endl;
+      } else {
+	of << ">" << seqname << std::endl;
+	for(uint32_t i = 0; i<oseq.size(); ++i) of << oseq[i];
+	of << std::endl;
+      }
       if (seq != NULL) free(seq);
       idxpos += seqlen + 1;
     }
