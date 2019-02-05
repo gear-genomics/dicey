@@ -152,9 +152,12 @@ namespace dicey
     int64_t idxpos = 0;
     for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
       ++show_progress;
-      if ((c.chrom != -1) && ((int32_t) refIndex != c.chrom)) continue;
-      int32_t seqlen = -1;
       std::string seqname(faidx_iseq(fai, refIndex));
+      if ((c.chrom != -1) && ((int32_t) refIndex != c.chrom)) {
+	idxpos += faidx_seq_len(fai, seqname.c_str()) + 1;
+	continue;
+      }
+      int32_t seqlen = -1;
       char* seq = faidx_fetch_seq(fai, seqname.c_str(), 0, faidx_seq_len(fai, seqname.c_str()), &seqlen);
       std::vector<char> oseq(seqlen, 'N');
 #pragma omp parallel for default(shared)
