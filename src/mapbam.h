@@ -27,6 +27,7 @@ Contact: Tobias Rausch (rausch@embl.de)
 #include <fstream>
 #include <iomanip>
 
+#include <boost/unordered_map.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
@@ -50,6 +51,8 @@ Contact: Tobias Rausch (rausch@embl.de)
 #endif
 
 #include <htslib/faidx.h>
+#include <htslib/sam.h>
+#include <htslib/vcf.h>
 
 #include "neighbors.h"
 #include "util.h"
@@ -60,9 +63,11 @@ namespace dicey
 {
 
   struct MapBamConfig {
+    bool hasChr;
+    uint16_t minQual;
     int32_t isize;
+    std::string chrom;
     boost::filesystem::path bamFile;
-    boost::filesystem::path genome;
     boost::filesystem::path outfile;
   };
 
@@ -74,7 +79,8 @@ namespace dicey
     boost::program_options::options_description generic("Generic options");
     generic.add_options()
       ("help,?", "show help message")
-      ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
+      ("quality,q", boost::program_options::value<uint16_t>(&c.minQual)->default_value(10), "min. mapping quality")
+      ("chromosome,c", boost::program_options::value<std::string>(&c.chrom), "chromosome name to process")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("map.fa.gz"), "gzipped output file")
       ("insertsize,s", boost::program_options::value<int32_t>(&c.isize)->default_value(501), "insert size")
       ;
@@ -96,25 +102,24 @@ namespace dicey
     boost::program_options::notify(vm);
     
     // Check command line arguments
-    if ((vm.count("help")) || (!vm.count("input-file")) || (!vm.count("genome"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g Danio_rerio.fa.gz chopped.bam" << std::endl;
+    if ((vm.count("help")) || (!vm.count("input-file"))) {
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] chopped.bam" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
 
+    // Chromosome
+    if (vm.count("chromosome")) c.hasChr = true;
+    else c.hasChr = false;
+    
     // Half-window
     int32_t halfwin = (int32_t) (c.isize / 2);
-    c.isize = 2 * halfwin;
+    c.isize = 2 * halfwin + 1;
 
-    // Check genome
-    if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
-      std::cerr << "Error: Genome does not exist!" << std::endl;
-      return 1;
-    }
-    
-    // Iterate chromosomes
-    faidx_t* fai = fai_load(c.genome.string().c_str());
-    uint32_t nchr = faidx_nseq(fai);
+    // Load bam file
+    samFile* samfile = sam_open(c.bamFile.string().c_str(), "r");
+    hts_idx_t* idx = sam_index_load(samfile, c.bamFile.string().c_str());
+    bam_hdr_t* hdr = sam_hdr_read(samfile);
 
     // Outfile
     boost::iostreams::filtering_ostream of;
@@ -123,20 +128,80 @@ namespace dicey
     
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Mappability" << std::endl;
-    boost::progress_display show_progress( nchr );
-    
-    for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
+    boost::progress_display show_progress( hdr->n_targets );
+    // Iterate chromosomes
+    for(uint32_t refIndex = 0; refIndex < (uint32_t) hdr->n_targets; ++refIndex) {
       ++show_progress;
-      std::string seqname(faidx_iseq(fai, refIndex));
-      int32_t seqlen = -1;
-      char* seq = faidx_fetch_seq(fai, seqname.c_str(), 0, faidx_seq_len(fai, seqname.c_str()), &seqlen);
-      
+      if ((c.hasChr) && (std::string(hdr->target_name[refIndex]) != c.chrom)) continue;
+      if (chrNoData(c, refIndex, idx)) continue;
 
-      if (seq != NULL) free(seq);
+      // Coverage track
+      typedef uint16_t TCount;
+      uint32_t maxCoverage = std::numeric_limits<TCount>::max();
+      typedef std::vector<TCount> TCoverage;
+      TCoverage cov(hdr->target_len[refIndex], 0);
+      TCoverage ucov(hdr->target_len[refIndex], 0);
+      
+      // Mate map
+      typedef boost::unordered_map<std::size_t, bool> TMateMap;
+      TMateMap mateMap;
+      
+      // Count reads
+      hts_itr_t* iter = sam_itr_queryi(idx, refIndex, 0, hdr->target_len[refIndex]);
+      bam1_t* rec = bam_init1();
+      int32_t lastAlignedPos = 0;
+      std::set<std::size_t> lastAlignedPosReads;
+      while (sam_itr_next(samfile, iter, rec) >= 0) {
+	if (rec->core.flag & (BAM_FSECONDARY | BAM_FQCFAIL | BAM_FDUP | BAM_FSUPPLEMENTARY | BAM_FUNMAP)) continue;
+	if ((rec->core.flag & BAM_FPAIRED) && ((rec->core.flag & BAM_FMUNMAP) || (rec->core.tid != rec->core.mtid))) continue;
+
+	int32_t midPoint = rec->core.pos + halfAlignmentLength(rec);
+	int32_t isize = 0;
+	if (rec->core.flag & BAM_FPAIRED) {
+	  // Clean-up the read store for identical alignment positions
+	  if (rec->core.pos > lastAlignedPos) {
+	    lastAlignedPosReads.clear();
+	    lastAlignedPos = rec->core.pos;
+	  }
+
+	  if ((rec->core.pos < rec->core.mpos) || ((rec->core.pos == rec->core.mpos) && (lastAlignedPosReads.find(hash_string(bam_get_qname(rec))) == lastAlignedPosReads.end()))) {
+	    // First read
+	    lastAlignedPosReads.insert(hash_string(bam_get_qname(rec)));
+	    std::size_t hv = hash_pair(rec);
+	    mateMap[hv] = true;
+	    continue;
+	  } else {
+	    // Second read
+	    std::size_t hv = hash_pair_mate(rec);
+	    if ((mateMap.find(hv) == mateMap.end()) || (!mateMap[hv])) continue; // Mate discarded
+	    mateMap[hv] = false;
+	  }
+	  isize = (rec->core.pos + alignmentLength(rec)) - rec->core.mpos;
+	  midPoint = rec->core.mpos + (int32_t) (isize/2);
+	}
+
+	// Count fragment
+	if ((midPoint >= 0) && (midPoint < (int32_t) hdr->target_len[refIndex]) && (cov[midPoint] < maxCoverage - 1)) ++cov[midPoint];
+	if ((rec->core.qual >= c.minQual) && (isize == c.isize)) {
+	  if ((midPoint >= 0) && (midPoint < (int32_t) hdr->target_len[refIndex]) && (ucov[midPoint] < maxCoverage - 1)) ++ucov[midPoint];
+	}
+      }
+      bam_destroy1(rec);
+      hts_itr_destroy(iter);
+
+      // Fill map
+      of << ">" << hdr->target_name[refIndex] << std::endl;
+      for(uint32_t pos = 0; pos < hdr->target_len[refIndex]; ++pos) {
+	if ((cov[pos] == 0) || (cov[pos] > 1)) of << 'N';
+	else {
+	  if (cov[pos] != ucov[pos]) of << 'A';
+	  else of << 'C';
+	}
+      }
+      of << std::endl;
     }
 
     // Clean-up
-    fai_destroy(fai);
     of.pop();
 
     // Done
