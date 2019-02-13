@@ -32,8 +32,10 @@ Contact: Tobias Rausch (rausch@embl.de)
 
 #include "version.h"
 #include "index.h"
+#include "chop.h"
 #include "hunter.h"
 #include "silica.h"
+#include "mapbam.h"
 #include "mappability.h"
 
 using namespace dicey;
@@ -86,6 +88,12 @@ int main(int argc, char **argv) {
   }
   else if ((std::string(argv[1]) == "mappability")) {
     return mappability(argc-1,argv+1);
+  }
+  else if ((std::string(argv[1]) == "mappability2")) {
+    return mapbam(argc-1,argv+1);
+  }
+  else if ((std::string(argv[1]) == "chop")) {
+    return chop(argc-1,argv+1);
   } else {
     std::cerr << "Unrecognized command " << std::string(argv[1]) << std::endl;
     return 1;

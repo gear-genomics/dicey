@@ -28,6 +28,15 @@ Contact: Tobias Rausch (rausch@embl.de)
 namespace dicey
 {
 
+  inline bool
+  nContent(std::string const& s) {
+    for(uint32_t i = 0; i < s.size(); ++i) {
+      if ((s[i] == 'N') || (s[i] == 'n')) return true;
+    }
+    return false;
+  }
+
+  
   template<typename TConfig>
   inline int32_t
   getSeqLenName(TConfig const& c, std::vector<uint32_t>& seqlen, std::vector<std::string>& seqname) {
