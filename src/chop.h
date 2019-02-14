@@ -156,11 +156,11 @@ namespace dicey
 	  std::string read2 = boost::to_upper_copy(std::string(seq + pos + halfwin - c.readlength + 1, seq + pos + halfwin + 1));
 	  if (nContent(read2)) continue;
 	  reverseComplement(read2);
-	  of1 << "@Frag" << index << " 1:N:0:0" << std::endl;
+	  of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
 	  of1 << read1 << std::endl;
 	  of1 << "+" << std::endl;
 	  of1 << readQual << std::endl;
-	  of2 << "@Frag" << index << " 2:N:0:0" << std::endl;
+	  of2 << "@Frag" << index << "_" << seqname << "_" << pos << " 2:N:0:0" << std::endl;
 	  of2 << read2 << std::endl;
 	  of2 << "+" << std::endl;
 	  of2 << readQual << std::endl;
