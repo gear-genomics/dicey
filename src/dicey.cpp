@@ -51,6 +51,13 @@ displayUsage() {
   std::cout << "    search       in-silico PCR" << std::endl;
   std::cout << std::endl;
   std::cout << std::endl;
+  std::cout << "Mappability:" << std::endl;
+  std::cout << std::endl;
+  std::cout << "    chop         chop reference into overlapping paired-ends" << std::endl;
+  std::cout << "    mappability  mappability using read's edit distance (slow)" << std::endl;
+  std::cout << "    mappability2 parse BAM from mapped chopped reads (requires chop + map before)" << std::endl;
+  std::cout << std::endl;
+  std::cout << std::endl;
 }
 
 int main(int argc, char **argv) {
