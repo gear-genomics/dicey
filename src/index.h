@@ -87,7 +87,7 @@ namespace dicey
 	
 	// Load FM index
 	now = boost::posix_time::second_clock::local_time();
-	if (!load_from_file(fm_index, index_file)) {
+	if (!load_from_checked_file(fm_index, index_file)) {
 	  std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Prepare FM-Index" << std::endl;
 	  // Dump fasta
 	  bool firstSeq = true;
@@ -115,7 +115,7 @@ namespace dicey
 	  
 	  // Build index
 	  construct(fm_index, dumpfile.string().c_str(), 1);
-	  store_to_file(fm_index, index_file);
+	  store_to_checked_file(fm_index, index_file);
 	  boost::filesystem::remove(dumpfile);
 	}
       }

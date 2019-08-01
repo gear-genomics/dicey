@@ -343,7 +343,7 @@ namespace dicey
     csa_wt<> fm_index;  
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
     std::string index_file = op.string() + ".fm9";
-    if (!load_from_file(fm_index, index_file)) {
+    if (!load_from_checked_file(fm_index, index_file)) {
       msg.push_back("Error: FM-Index cannot be loaded!");
       jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
