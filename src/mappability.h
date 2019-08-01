@@ -156,7 +156,6 @@ namespace dicey
       char* seq = faidx_fetch_seq(fai, seqname.c_str(), 0, faidx_seq_len(fai, seqname.c_str()), &seqlen);
       
       std::vector<char> oseq(seqlen, 'N');
-#pragma omp parallel for default(shared)
       for(int32_t pos = 0; pos < (seqlen - c.readlength + 1); ++pos) {
 	if (c.chunkStart != -1) {
 	  if ((pos + halfwin < c.chunkStart) || (pos + halfwin >= c.chunkEnd)) continue;
