@@ -5,7 +5,7 @@
 [![GitHub Releases](https://img.shields.io/github/release/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/releases)
 [![GitHub Issues](https://img.shields.io/github/issues/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/issues)
 
-# Installing dicey
+## Installing dicey
 
 The easiest way to get Dicey is to download a statically linked binary from the [Dicey release page](https://github.com/gear-genomics/dicey/releases) or to download Dicey from [Bioconda](https://anaconda.org/bioconda/dicey). Building from source is also possible:
 
@@ -21,6 +21,10 @@ The easiest way to get Dicey is to download a statically linked binary from the 
 
 This will generate the binary `bin/dicey`.
 
+
+## Running Dicey
+
+`dicey -h`
 
 ## Sequence search in an indexed reference genome
 
@@ -38,6 +42,8 @@ You can also redirect the output in JSON format to a file.
 
 `dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
 
+Pre-built genome indices for commonly used reference genomes are available for [download here](https://gear.embl.de/data/tracy/).
+
 
 ## In-silico PCR for a set of primers
 
@@ -52,13 +58,18 @@ The default output is a JSON file that can also be stored in a file.
 `dicey search -c 45 -o out.json.gz -g hg19.fa.gz primers.fa`
 
 
+## Graphical user interface
+
+You can search primers interactively using our web application [silica](https://gear.embl.de/silica/).
+
+
 ## FAQ
 
 * Dicey cannot find the primer3 config directory    
-The primer3 config directory is included in the repository. Just clone the repository `git clone https://github.com/gear-genomics/dicey.git` and then use the cloned config directory `dicey search -i dicey/src/primer3_config/ -g hg19.fa.gz primers.fa`.
+The primer3 config directory is included in the repository. Just clone the repository `git clone --recursive https://github.com/gear-genomics/dicey.git` and then use the cloned config directory `dicey search -i dicey/src/primer3_config/ -g hg19.fa.gz primers.fa`.
 
 * The script `json2txt.py` is not found     
-The `json2txt.py` python script is included in the repository. Just clone the repository `git clone https://github.com/gear-genomics/dicey.git` and then you will find the script in the `./scripts/` subdirectory.
+The `json2txt.py` python script is included in the repository. Just clone the repository `git clone --recursive https://github.com/gear-genomics/dicey.git` and then you will find the script in the `./scripts/` subdirectory.
 
 
 ## Questions
