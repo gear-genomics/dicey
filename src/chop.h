@@ -36,6 +36,7 @@ namespace dicey
   struct ChopConfig {
     bool se;
     bool sf;
+    bool revcomp;
     uint32_t readlength;
     uint32_t isize;
     boost::filesystem::path genome;
@@ -58,6 +59,7 @@ namespace dicey
       ("insertsize,s", boost::program_options::value<uint32_t>(&c.isize)->default_value(501), "insert size")
       ("se,e", "generate single-end data")
       ("chromosome,c", "generate reads by chromosome")
+      ("revcomp,p", "reverse complement all reads")
       ;
     
     boost::program_options::options_description hidden("Hidden options");
@@ -90,6 +92,10 @@ namespace dicey
     // Single output file?
     if (vm.count("chromosome")) c.sf = false;
     else c.sf = true;
+
+    // Reverse complement
+    if (vm.count("revcomp")) c.revcomp = true;
+    else c.revcomp = false;
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
@@ -140,6 +146,7 @@ namespace dicey
 	  for(int32_t pos = 0; ((pos + (int32_t) c.readlength) <= sql); ++pos, ++index) {
 	    std::string read1 = boost::to_upper_copy(std::string(seq + pos, seq + pos + c.readlength));
 	    if (nContent(read1)) continue;
+	    if (c.revcomp) reverseComplement(read1);
 	    of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
 	    of1 << read1 << std::endl;
 	    of1 << "+" << std::endl;
