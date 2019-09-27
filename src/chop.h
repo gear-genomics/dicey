@@ -37,6 +37,7 @@ namespace dicey
     bool se;
     bool sf;
     bool revcomp;
+    bool hashing;
     uint32_t readlength;
     uint32_t isize;
     boost::filesystem::path genome;
@@ -60,6 +61,7 @@ namespace dicey
       ("se,s", "generate single-end data")
       ("chromosome,c", "generate reads by chromosome")
       ("revcomp,r", "reverse complement all reads")
+      ("hashing,a", "output hashed reads")
       ;
     
     boost::program_options::options_description hidden("Hidden options");
@@ -96,6 +98,10 @@ namespace dicey
     // Reverse complement
     if (vm.count("revcomp")) c.revcomp = true;
     else c.revcomp = false;
+
+    // Hashing
+    if (vm.count("hashing")) c.hashing = true;
+    else c.hashing = false;
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
@@ -148,10 +154,14 @@ namespace dicey
 	    std::string read1 = boost::to_upper_copy(std::string(seq + pos, seq + pos + c.readlength));
 	    if (nContent(read1)) continue;
 	    if (c.revcomp) reverseComplement(read1);
-	    of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
-	    of1 << read1 << std::endl;
-	    of1 << "+" << std::endl;
-	    of1 << readQual << std::endl;
+	    if (c.hashing) {
+	      of1 << hash_string(read1.c_str()) << std::endl;
+	    } else {
+	      of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
+	      of1 << read1 << std::endl;
+	      of1 << "+" << std::endl;
+	      of1 << readQual << std::endl;
+	    }
 	  }
 	  if (!c.sf) {
 	    of1.pop();
@@ -235,14 +245,19 @@ namespace dicey
 	    std::string read2 = boost::to_upper_copy(std::string(seq + pos + halfwin - c.readlength + 1, seq + pos + halfwin + 1));
 	    if (nContent(read2)) continue;
 	    if (!c.revcomp) reverseComplement(read2);
-	    of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
-	    of1 << read1 << std::endl;
-	    of1 << "+" << std::endl;
-	    of1 << readQual << std::endl;
-	    of2 << "@Frag" << index << "_" << seqname << "_" << pos << " 2:N:0:0" << std::endl;
-	    of2 << read2 << std::endl;
-	    of2 << "+" << std::endl;
-	    of2 << readQual << std::endl;
+	    if (c.hashing) {
+	      of1 << hash_string(read1.c_str()) << std::endl;
+	      of2 << hash_string(read2.c_str()) << std::endl;
+	    } else {
+	      of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
+	      of1 << read1 << std::endl;
+	      of1 << "+" << std::endl;
+	      of1 << readQual << std::endl;
+	      of2 << "@Frag" << index << "_" << seqname << "_" << pos << " 2:N:0:0" << std::endl;
+	      of2 << read2 << std::endl;
+	      of2 << "+" << std::endl;
+	      of2 << readQual << std::endl;
+	    }
 	  }
 	  if (!c.sf) {
 	    of1.pop();
