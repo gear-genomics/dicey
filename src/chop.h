@@ -55,11 +55,11 @@ namespace dicey
       ("help,?", "show help message")
       ("fq1,f", boost::program_options::value<std::string>(&c.fq1)->default_value("read1"), "read1 output prefix")
       ("fq2,g", boost::program_options::value<std::string>(&c.fq2)->default_value("read2"), "read2 output prefix")
-      ("readlength,r", boost::program_options::value<uint32_t>(&c.readlength)->default_value(101), "read length")
-      ("insertsize,s", boost::program_options::value<uint32_t>(&c.isize)->default_value(501), "insert size")
-      ("se,e", "generate single-end data")
+      ("length,l", boost::program_options::value<uint32_t>(&c.readlength)->default_value(101), "read length")
+      ("insertsize,i", boost::program_options::value<uint32_t>(&c.isize)->default_value(501), "insert size")
+      ("se,s", "generate single-end data")
       ("chromosome,c", "generate reads by chromosome")
-      ("revcomp,p", "reverse complement all reads")
+      ("revcomp,r", "reverse complement all reads")
       ;
     
     boost::program_options::options_description hidden("Hidden options");
@@ -103,6 +103,7 @@ namespace dicey
       return 1;
     }
 
+    // Single-end or paired-end?
     if (c.se) {
       // Read-length
       if (c.readlength >= qual.size()) c.readlength = qual.size() - 1;
@@ -175,7 +176,7 @@ namespace dicey
       c.isize = 2 * halfwin + 1;
 
       // Read-length < isize
-      if (c.readlength >= c.isize) c.readlength = c.isize - 1;
+      if (c.readlength > c.isize) c.readlength = c.isize - 1;
       if (c.readlength >= qual.size()) c.readlength = qual.size() - 1;
       std::string readQual = qual.substr(0, c.readlength);
 
@@ -188,6 +189,18 @@ namespace dicey
       boost::progress_display show_progress( nchr );
 
       uint32_t index = 0;
+      boost::iostreams::filtering_ostream of1;
+      if (c.sf) {
+	std::string read1fq = c.fq1 + ".fq.gz";
+	of1.push(boost::iostreams::gzip_compressor());
+	of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+      }
+      boost::iostreams::filtering_ostream of2;
+      if (c.sf) {
+	std::string read2fq = c.fq2 + ".fq.gz";
+	of2.push(boost::iostreams::gzip_compressor());
+	of2.push(boost::iostreams::file_sink(read2fq.c_str(), std::ios_base::out | std::ios_base::binary));
+      }
       for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
 	++show_progress;
 
@@ -201,24 +214,27 @@ namespace dicey
 	if (halfwin < sql) {
 	  
 	  // FQ1
-	  std::string read1fq = c.fq1 + "." + seqname + ".fq.gz";
-	  boost::iostreams::filtering_ostream of1;
-	  of1.push(boost::iostreams::gzip_compressor());
-	  of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	  if (!c.sf) {
+	    std::string read1fq = c.fq1 + "." + seqname + ".fq.gz";
+	    of1.push(boost::iostreams::gzip_compressor());
+	    of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	  }
 	  
 	  // FQ2
-	  std::string read2fq = c.fq2 + "." + seqname + ".fq.gz";
-	  boost::iostreams::filtering_ostream of2;
-	  of2.push(boost::iostreams::gzip_compressor());
-	  of2.push(boost::iostreams::file_sink(read2fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	  if (!c.sf) {
+	    std::string read2fq = c.fq2 + "." + seqname + ".fq.gz";
+	    of2.push(boost::iostreams::gzip_compressor());
+	    of2.push(boost::iostreams::file_sink(read2fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	  }
 	  
 	  // Iterate chr
 	  for(int32_t pos = halfwin; pos < sql - halfwin; ++pos, ++index) {
 	    std::string read1 = boost::to_upper_copy(std::string(seq + pos - halfwin, seq + pos - halfwin + c.readlength));
 	    if (nContent(read1)) continue;
+	    if (c.revcomp) reverseComplement(read1);
 	    std::string read2 = boost::to_upper_copy(std::string(seq + pos + halfwin - c.readlength + 1, seq + pos + halfwin + 1));
 	    if (nContent(read2)) continue;
-	    reverseComplement(read2);
+	    if (!c.revcomp) reverseComplement(read2);
 	    of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
 	    of1 << read1 << std::endl;
 	    of1 << "+" << std::endl;
@@ -228,12 +244,21 @@ namespace dicey
 	    of2 << "+" << std::endl;
 	    of2 << readQual << std::endl;
 	  }
-	  
-	  of1.pop();
-	  of2.pop();
+	  if (!c.sf) {
+	    of1.pop();
+	    of1.pop();
+	    of2.pop();
+	    of2.pop();
+	  }
 	}
 	// Clean-up	
 	if (seq != NULL) free(seq);
+      }
+      if (c.sf) {
+	of1.pop();
+	of1.pop();
+	of2.pop();
+	of2.pop();
       }
 
       // Clean-up
