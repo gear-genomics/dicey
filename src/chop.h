@@ -46,6 +46,20 @@ namespace dicey
   };
 
 
+  template<typename TConfig>
+  inline void
+  _processFasta(TConfig const& c, std::string const& seq) {
+    for(uint32_t pos = 0; ((pos + c.readlength) <= seq.size()); ++pos) {
+      std::string kmer = boost::to_upper_copy(std::string(&seq[0] + pos, &seq[0] + pos + c.readlength));
+      if (nContent(kmer)) continue;
+      unsigned h1 = hash_string(kmer.c_str());
+      reverseComplement(kmer);
+      unsigned h2 = hash_string(kmer.c_str());
+      if (h1 < h2) std::cout << h1 << '\t' << h2 << std::endl;
+      else std::cout << h2 << '\t' << h1 << std::endl;
+    }
+  }
+  
   int chop(int argc, char** argv) {
     ChopConfig c;
     std::string qual("AAFFFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJAJJFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJJJJJJJJ7FJJJFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
@@ -100,8 +114,11 @@ namespace dicey
     else c.revcomp = false;
 
     // Hashing
-    if (vm.count("hashing")) c.hashing = true;
-    else c.hashing = false;
+    if (vm.count("hashing")) {
+      // Kmer mode
+      c.hashing = true;
+      c.se = true; // Always single-end, fwd and rev
+    } else c.hashing = false;
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
@@ -115,70 +132,98 @@ namespace dicey
       if (c.readlength >= qual.size()) c.readlength = qual.size() - 1;
       std::string readQual = qual.substr(0, c.readlength);
 
-      // Iterate chromosomes
-      faidx_t* fai = fai_load(c.genome.string().c_str());
-      uint32_t nchr = faidx_nseq(fai);
-      
-      boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
-      std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Chop reference" << std::endl;
-      boost::progress_display show_progress( nchr );
-
-      uint32_t index = 0;
-      boost::iostreams::filtering_ostream of1;
-      if (c.sf) {
-	std::string read1fq = c.fq1 + ".fq.gz";
-	of1.push(boost::iostreams::gzip_compressor());
-	of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
-      }
-      for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
-	++show_progress;
-
-	// Load chromosome
-	std::string seqname(faidx_iseq(fai, refIndex));
-	int32_t sql = faidx_seq_len(fai, seqname.c_str());
-	int32_t seqlen = -1;
-	char* seq = faidx_fetch_seq(fai, seqname.c_str(), 0, sql, &seqlen);
-	
-	// Generate paired-end reads
-	if ((int32_t) c.readlength <= sql) {
-	  
-	  // FQ1
-	  if (!c.sf) {
-	    std::string read1fq = c.fq1 + "." + seqname + ".fq.gz";
-	    of1.push(boost::iostreams::gzip_compressor());
-	    of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+      // Hashing mode?
+      if (c.hashing) {
+	std::string faname = "";
+	std::string tmpfasta = "";
+	std::ifstream fafile(c.genome.string().c_str());
+	if (fafile.good()) {
+	  std::string line;
+	  while(std::getline(fafile, line)) {
+	    if (!line.empty()) {
+	      if (line[0] == '>') {
+		if (!tmpfasta.empty()) {
+		  _processFasta(c, tmpfasta);
+		  tmpfasta.clear();
+		}
+		if (line.at(line.length() - 1) == '\r' ){
+		  faname = line.substr(1, line.length() - 2);
+		} else {
+		  faname = line.substr(1);
+		}
+	      } else {
+		if (line.at(line.length() - 1) == '\r' ){
+		  tmpfasta += boost::to_upper_copy(line.substr(0, line.length() - 1));
+		} else {
+		  tmpfasta += boost::to_upper_copy(line);
+		}
+	      }
+	    }
 	  }
+	  if (!tmpfasta.empty()) _processFasta(c, tmpfasta);
+	  fafile.close();
+	}
+      } else {
+	// Iterate chromosomes
+	faidx_t* fai = fai_load(c.genome.string().c_str());
+	uint32_t nchr = faidx_nseq(fai);
+      
+	boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Chop reference" << std::endl;
+	boost::progress_display show_progress( nchr );
+
+	uint32_t index = 0;
+	boost::iostreams::filtering_ostream of1;
+	if (c.sf) {
+	  std::string read1fq = c.fq1 + ".fq.gz";
+	  of1.push(boost::iostreams::gzip_compressor());
+	  of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	}
+	for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
+	  ++show_progress;
+
+	  // Load chromosome
+	  std::string seqname(faidx_iseq(fai, refIndex));
+	  int32_t sql = faidx_seq_len(fai, seqname.c_str());
+	  int32_t seqlen = -1;
+	  char* seq = faidx_fetch_seq(fai, seqname.c_str(), 0, sql, &seqlen);
+	
+	  // Generate paired-end reads
+	  if ((int32_t) c.readlength <= sql) {
 	  
-	  // Iterate chr
-	  for(int32_t pos = 0; ((pos + (int32_t) c.readlength) <= sql); ++pos, ++index) {
-	    std::string read1 = boost::to_upper_copy(std::string(seq + pos, seq + pos + c.readlength));
-	    if (nContent(read1)) continue;
-	    if (c.revcomp) reverseComplement(read1);
-	    if (c.hashing) {
-	      of1 << hash_string(read1.c_str()) << std::endl;
-	    } else {
+	    // FQ1
+	    if (!c.sf) {
+	      std::string read1fq = c.fq1 + "." + seqname + ".fq.gz";
+	      of1.push(boost::iostreams::gzip_compressor());
+	      of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	    }
+	  
+	    // Iterate chr
+	    for(int32_t pos = 0; ((pos + (int32_t) c.readlength) <= sql); ++pos, ++index) {
+	      std::string read1 = boost::to_upper_copy(std::string(seq + pos, seq + pos + c.readlength));
+	      if (nContent(read1)) continue;
+	      if (c.revcomp) reverseComplement(read1);
 	      of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
 	      of1 << read1 << std::endl;
 	      of1 << "+" << std::endl;
 	      of1 << readQual << std::endl;
 	    }
+	    if (!c.sf) {
+	      of1.pop();
+	      of1.pop();
+	    }
 	  }
-	  if (!c.sf) {
-	    of1.pop();
-	    of1.pop();
-	  }
+	  // Clean-up	
+	  if (seq != NULL) free(seq);
 	}
-	// Clean-up	
-	if (seq != NULL) free(seq);
-      }
-      if (c.sf) {
-	of1.pop();
-	of1.pop();
-      }
+	if (c.sf) {
+	  of1.pop();
+	  of1.pop();
+	}
 
-      // Clean-up
-      fai_destroy(fai);
-
+	// Clean-up
+	fai_destroy(fai);
+      }
       
     } else {
       // Half-window
@@ -245,19 +290,14 @@ namespace dicey
 	    std::string read2 = boost::to_upper_copy(std::string(seq + pos + halfwin - c.readlength + 1, seq + pos + halfwin + 1));
 	    if (nContent(read2)) continue;
 	    if (!c.revcomp) reverseComplement(read2);
-	    if (c.hashing) {
-	      of1 << hash_string(read1.c_str()) << std::endl;
-	      of2 << hash_string(read2.c_str()) << std::endl;
-	    } else {
-	      of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
-	      of1 << read1 << std::endl;
-	      of1 << "+" << std::endl;
-	      of1 << readQual << std::endl;
-	      of2 << "@Frag" << index << "_" << seqname << "_" << pos << " 2:N:0:0" << std::endl;
-	      of2 << read2 << std::endl;
-	      of2 << "+" << std::endl;
-	      of2 << readQual << std::endl;
-	    }
+	    of1 << "@Frag" << index << "_" << seqname << "_" << pos << " 1:N:0:0" << std::endl;
+	    of1 << read1 << std::endl;
+	    of1 << "+" << std::endl;
+	    of1 << readQual << std::endl;
+	    of2 << "@Frag" << index << "_" << seqname << "_" << pos << " 2:N:0:0" << std::endl;
+	    of2 << read2 << std::endl;
+	    of2 << "+" << std::endl;
+	    of2 << readQual << std::endl;
 	  }
 	  if (!c.sf) {
 	    of1.pop();
