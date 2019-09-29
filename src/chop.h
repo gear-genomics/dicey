@@ -46,17 +46,17 @@ namespace dicey
   };
 
 
-  template<typename TConfig>
+  template<typename TConfig, typename TStream>
   inline void
-  _processFasta(TConfig const& c, std::string const& seq) {
+  _processFasta(TConfig const& c, TStream& of, std::string const& seq) {
     for(uint32_t pos = 0; ((pos + c.readlength) <= seq.size()); ++pos) {
       std::string kmer = boost::to_upper_copy(std::string(&seq[0] + pos, &seq[0] + pos + c.readlength));
       if (nContent(kmer)) continue;
       unsigned h1 = hash_string(kmer.c_str());
       reverseComplement(kmer);
       unsigned h2 = hash_string(kmer.c_str());
-      if (h1 < h2) std::cout << h1 << '\t' << h2 << std::endl;
-      else std::cout << h2 << '\t' << h1 << std::endl;
+      if (h1 < h2) of << h1 << '\t' << h2 << std::endl;
+      else of << h2 << '\t' << h1 << std::endl;
     }
   }
   
@@ -75,12 +75,12 @@ namespace dicey
       ("se,s", "generate single-end data")
       ("chromosome,c", "generate reads by chromosome")
       ("revcomp,r", "reverse complement all reads")
-      ("hashing,a", "output hashed reads")
       ;
     
     boost::program_options::options_description hidden("Hidden options");
     hidden.add_options()
       ("input-file", boost::program_options::value<boost::filesystem::path>(&c.genome), "indexed genome")
+      ("hashing,a", "output hashed reads")
       ;
     
     boost::program_options::positional_options_description pos_args;
@@ -134,35 +134,52 @@ namespace dicey
 
       // Hashing mode?
       if (c.hashing) {
+	boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Kmer hashes" << std::endl;
+	
+	// Output file
+	boost::iostreams::filtering_ostream of1;
+	std::string read1fq = c.fq1 + ".hashes.gz";
+	of1.push(boost::iostreams::gzip_compressor());
+	of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+
+	// Fasta input (gzipped)
 	std::string faname = "";
 	std::string tmpfasta = "";
-	std::ifstream fafile(c.genome.string().c_str());
-	if (fafile.good()) {
-	  std::string line;
-	  while(std::getline(fafile, line)) {
-	    if (!line.empty()) {
-	      if (line[0] == '>') {
-		if (!tmpfasta.empty()) {
-		  _processFasta(c, tmpfasta);
-		  tmpfasta.clear();
-		}
-		if (line.at(line.length() - 1) == '\r' ){
-		  faname = line.substr(1, line.length() - 2);
-		} else {
-		  faname = line.substr(1);
-		}
+	std::ifstream fafile(c.genome.string().c_str(), std::ios_base::in | std::ios_base::binary);
+	boost::iostreams::filtering_streambuf<boost::iostreams::input> dataIn;
+	dataIn.push(boost::iostreams::gzip_decompressor());
+	dataIn.push(fafile);
+	std::istream instream(&dataIn);
+	std::string line;
+	while(std::getline(instream, line)) {
+	  if (!line.empty()) {
+	    if (line[0] == '>') {
+	      if (!tmpfasta.empty()) {
+		_processFasta(c, of1, tmpfasta);
+		tmpfasta.clear();
+	      }
+	      if (line.at(line.length() - 1) == '\r' ){
+		faname = line.substr(1, line.length() - 2);
 	      } else {
-		if (line.at(line.length() - 1) == '\r' ){
-		  tmpfasta += boost::to_upper_copy(line.substr(0, line.length() - 1));
-		} else {
-		  tmpfasta += boost::to_upper_copy(line);
-		}
+		faname = line.substr(1);
+	      }
+	    } else {
+	      if (line.at(line.length() - 1) == '\r' ){
+		tmpfasta += boost::to_upper_copy(line.substr(0, line.length() - 1));
+	      } else {
+		tmpfasta += boost::to_upper_copy(line);
 	      }
 	    }
 	  }
-	  if (!tmpfasta.empty()) _processFasta(c, tmpfasta);
-	  fafile.close();
 	}
+	if (!tmpfasta.empty()) _processFasta(c, of1, tmpfasta);
+	dataIn.pop();
+	dataIn.pop();
+	fafile.close();
+
+	of1.pop();
+	of1.pop();
       } else {
 	// Iterate chromosomes
 	faidx_t* fai = fai_load(c.genome.string().c_str());
