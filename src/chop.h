@@ -49,13 +49,14 @@ namespace dicey
   template<typename TConfig, typename TStream>
   inline void
   _processFasta(TConfig const& c, TStream& of, std::string const& seq) {
-    for(uint32_t pos = 0; ((pos + c.readlength) <= seq.size()); ++pos) {
-      std::string kmer = boost::to_upper_copy(std::string(&seq[0] + pos, &seq[0] + pos + c.readlength));
-      if (nContent(kmer)) continue;
-      unsigned h1 = hash_string(kmer.c_str());
-      reverseComplement(kmer);
-      unsigned h2 = hash_string(kmer.c_str());
-      if (h1 < h2) of << h1 << '\t' << h2 << std::endl;
+    std::string rcseq(seq);
+    reverseComplement(rcseq);
+    uint32_t seqlen = seq.size();
+    for(uint32_t pos = 0; ((pos + c.readlength) <= seqlen); ++pos) {
+      if (nContent(seq.substr(pos, c.readlength))) continue;
+      unsigned h1 = hash_string(seq.substr(pos, c.readlength).c_str());
+      unsigned h2 = hash_string(rcseq.substr(seqlen - c.readlength - pos, c.readlength).c_str());
+      if (h1 < h2) of << h1 << '\t' << h2 << '\t' << std::endl;
       else of << h2 << '\t' << h1 << std::endl;
     }
   }
