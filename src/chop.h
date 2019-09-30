@@ -56,7 +56,7 @@ namespace dicey
       if (nContent(seq.substr(pos, c.readlength))) continue;
       unsigned h1 = hash_string(seq.substr(pos, c.readlength).c_str());
       unsigned h2 = hash_string(rcseq.substr(seqlen - c.readlength - pos, c.readlength).c_str());
-      if (h1 < h2) of << h1 << '\t' << h2 << '\t' << std::endl;
+      if (h1 < h2) of << h1 << '\t' << h2 << std::endl;
       else of << h2 << '\t' << h1 << std::endl;
     }
   }
