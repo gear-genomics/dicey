@@ -199,6 +199,7 @@ namespace dicey
 	dataIn.pop();
 	dataIn.pop();
 	fafile.close();
+	now = boost::posix_time::second_clock::local_time();
 	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Hashed " << kmerCount << " k-mers." << std::endl;	
 
 	for(uint32_t i= 0; i < c.nTmpFile; ++i) {
@@ -245,6 +246,8 @@ namespace dicey
 	  ofSort.pop();
 	  ofSort.pop();
 	}
+	now = boost::posix_time::second_clock::local_time();
+	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Sorted " << c.nTmpFile << " chunks." << std::endl;	
 
 	// Open final output file
 	boost::iostreams::filtering_ostream dataOut;
@@ -321,7 +324,10 @@ namespace dicey
 	// Close sorted output file
 	dataOut.pop();
 	dataOut.pop();
-	
+
+	// Done
+	now = boost::posix_time::second_clock::local_time();
+	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Merged " << c.nTmpFile << " chunks." << std::endl;	
       } else {
 	// Iterate chromosomes
 	faidx_t* fai = fai_load(c.genome.string().c_str());
