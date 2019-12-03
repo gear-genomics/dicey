@@ -40,15 +40,16 @@ namespace dicey
     bool hashing;
     uint32_t readlength;
     uint32_t isize;
+    uint32_t nTmpFile;
     boost::filesystem::path genome;
     std::string fq1;
     std::string fq2;
   };
 
 
-  template<typename TConfig, typename TStream>
+  template<typename TConfig, typename TVectorStream>
   inline void
-  _processFasta(TConfig const& c, TStream& of, std::string const& seq) {
+  _processFasta(TConfig const& c, TVectorStream& ofAll, std::string const& seq, uint64_t& kmerCount) {
     std::string rcseq(seq);
     reverseComplement(rcseq);
     uint32_t seqlen = seq.size();
@@ -56,13 +57,21 @@ namespace dicey
       if (nContent(seq.substr(pos, c.readlength))) continue;
       unsigned h1 = hash_string(seq.substr(pos, c.readlength).c_str());
       unsigned h2 = hash_string(rcseq.substr(seqlen - c.readlength - pos, c.readlength).c_str());
-      if (h1 < h2) of << h1 << '\t' << h2 << std::endl;
-      else of << h2 << '\t' << h1 << std::endl;
+      if (h1 < h2) {
+	//std::cerr << h1 << '\t' << h2 << std::endl;
+	ofAll[kmerCount%c.nTmpFile] << h1 << '\t' << h2 << std::endl;
+      } else {
+	//std::cerr << h2 << '\t' << h1 << std::endl;
+	ofAll[kmerCount%c.nTmpFile] << h2 << '\t' << h1 << std::endl;
+      }
+      ++kmerCount;
     }
   }
   
   int chop(int argc, char** argv) {
     ChopConfig c;
+    c.nTmpFile = 100;
+    
     std::string qual("AAFFFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJAJJFJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJFJJJJJJJJJJJ7FJJJFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   
     // Parameter
@@ -139,10 +148,13 @@ namespace dicey
 	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Kmer hashes" << std::endl;
 	
 	// Output file
-	boost::iostreams::filtering_ostream of1;
-	std::string read1fq = c.fq1 + ".hashes.gz";
-	of1.push(boost::iostreams::gzip_compressor());
-	of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	uint64_t kmerCount = 0;
+	std::vector<boost::iostreams::filtering_ostream> ofAll(c.nTmpFile);
+	for(uint32_t i = 0; i < c.nTmpFile; ++i) {
+	  std::string read1fq = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".hashes.gz";
+	  ofAll[i].push(boost::iostreams::gzip_compressor());
+	  ofAll[i].push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	}
 
 	// Fasta input (gzipped)
 	std::string faname = "";
@@ -154,10 +166,11 @@ namespace dicey
 	std::istream instream(&dataIn);
 	std::string line;
 	while(std::getline(instream, line)) {
+	  //if (kmerCount > 1000000) break;
 	  if (!line.empty()) {
 	    if (line[0] == '>') {
 	      if (!tmpfasta.empty()) {
-		_processFasta(c, of1, tmpfasta);
+		_processFasta(c, ofAll, tmpfasta, kmerCount);
 		tmpfasta.clear();
 	      }
 	      if (line.at(line.length() - 1) == '\r' ){
@@ -174,13 +187,133 @@ namespace dicey
 	    }
 	  }
 	}
-	if (!tmpfasta.empty()) _processFasta(c, of1, tmpfasta);
+	if (!tmpfasta.empty()) _processFasta(c, ofAll, tmpfasta, kmerCount);
 	dataIn.pop();
 	dataIn.pop();
 	fafile.close();
+	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Hashed " << kmerCount << " k-mers." << std::endl;	
 
-	of1.pop();
-	of1.pop();
+	for(uint32_t i= 0; i < c.nTmpFile; ++i) {
+	  ofAll[i].pop();
+	  ofAll[i].pop();
+	}
+
+	// Sort chunks
+	for(uint32_t i = 0; i < c.nTmpFile; ++i) {
+	  std::string read1fq = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".hashes.gz";
+	  std::ifstream kmerchunk(read1fq.c_str());
+	  boost::iostreams::filtering_streambuf<boost::iostreams::input> dataIn;
+	  dataIn.push(boost::iostreams::gzip_decompressor());
+	  dataIn.push(kmerchunk);
+	  std::istream instream(&dataIn);
+	  std::string line;
+	  std::vector<std::pair<unsigned, unsigned> > hashVec;
+	  while(std::getline(instream, line)) {
+	    typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
+	    boost::char_separator<char> sep("\t");
+	    Tokenizer tokens(line, sep);
+	    Tokenizer::iterator tokIter = tokens.begin();
+	    unsigned h1 = boost::lexical_cast<unsigned>(*tokIter++);
+	    unsigned h2 = boost::lexical_cast<unsigned>(*tokIter++);
+	    hashVec.push_back(std::make_pair(h1, h2));
+	  }
+	  dataIn.pop();
+	  dataIn.pop();
+	  
+	  // Delete input file
+	  boost::filesystem::remove(read1fq);
+	  
+	  // Sort
+	  std::sort(hashVec.begin(), hashVec.end());
+
+	  // Sorted output file
+	  boost::iostreams::filtering_ostream ofSort;
+	  std::string read1sort = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".sort.gz";
+	  ofSort.push(boost::iostreams::gzip_compressor());
+	  ofSort.push(boost::iostreams::file_sink(read1sort.c_str(), std::ios_base::out | std::ios_base::binary));
+	  for(uint32_t j = 0; j < hashVec.size(); ++j) {
+	    ofSort << hashVec[j].first << '\t' << hashVec[j].second << std::endl;
+	  }
+	  ofSort.pop();
+	  ofSort.pop();
+	}
+
+	// Open final output file
+	boost::iostreams::filtering_ostream dataOut;
+	std::string read1fq = c.fq1 + ".hashes.gz";
+	dataOut.push(boost::iostreams::gzip_compressor());
+	dataOut.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	
+	// Merge sorted chunks
+	std::vector<std::ifstream> ifData(c.nTmpFile);
+	std::vector<boost::iostreams::filtering_streambuf<boost::iostreams::input> > inData(c.nTmpFile);
+	for(uint32_t i = 0; i < c.nTmpFile; ++i) {
+	  std::string read1sort = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".sort.gz";
+	  ifData[i].open(read1sort.c_str());
+	  inData[i].push(boost::iostreams::gzip_decompressor());
+	  inData[i].push(ifData[i]);
+	}
+	uint32_t allEOF = 0;
+	std::vector<bool> eof(c.nTmpFile, false);
+	std::vector<std::pair<unsigned, unsigned> > lastPair(c.nTmpFile, std::make_pair(0, 0));
+	std::vector<bool> lastPairValid(c.nTmpFile, false);
+	while(allEOF < c.nTmpFile) {
+	  // Next sorted record
+	  int32_t bestIdx = -1;
+	  for(uint32_t i = 0; i < c.nTmpFile; ++i) {
+	    if (!eof[i]) {
+	      // Read next hash pair if necessary
+	      if (!lastPairValid[i]) {
+		// Read next line
+		std::istream incoming(&inData[i]);
+		std::string line;
+		if (getline(incoming, line)) {
+		  typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
+		  boost::char_separator<char> sep("\t");
+		  Tokenizer tokens(line, sep);
+		  Tokenizer::iterator tokIter = tokens.begin();
+		  unsigned h1 = boost::lexical_cast<unsigned>(*tokIter++);
+		  unsigned h2 = boost::lexical_cast<unsigned>(*tokIter++);
+		  lastPair[i].first = h1;
+		  lastPair[i].second = h2;
+		  lastPairValid[i] = true;
+		} else {
+		  eof[i] = true;
+		  ++allEOF;
+		}
+	      }
+	      // Find next sorted hash pair
+	      if (lastPairValid[i]) {
+		if (bestIdx == -1) bestIdx = i;
+		else {
+		  if ((lastPair[i].first < lastPair[bestIdx].first) || ((lastPair[i].first == lastPair[bestIdx].first) && (lastPair[i].second < lastPair[bestIdx].second))) bestIdx = i;
+		}
+	      }
+	    }
+	  }
+	  if (bestIdx != -1) {
+	    dataOut << lastPair[bestIdx].first << '\t' << lastPair[bestIdx].second << std::endl;
+	    lastPairValid[bestIdx] = false;
+	  } else {
+	    if (allEOF < c.nTmpFile) {
+	      std::cerr << "Error: Unknown next sorted hash!" << std::endl;
+	      exit(-1);
+	    }
+	  }
+	}
+	for(uint32_t i = 0; i < c.nTmpFile; ++i) {
+	  inData[i].pop();
+	  inData[i].pop();
+
+	  // Delete sorted chunk
+	  std::string read1sort = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".sort.gz";
+	  boost::filesystem::remove(read1sort);
+	}
+
+	// Close sorted output file
+	dataOut.pop();
+	dataOut.pop();
+	
       } else {
 	// Iterate chromosomes
 	faidx_t* fai = fai_load(c.genome.string().c_str());
