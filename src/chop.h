@@ -47,9 +47,9 @@ namespace dicey
   };
 
 
-  template<typename TConfig, typename TVectorStream>
+  template<typename TConfig, typename TStream>
   inline void
-  _processFasta(TConfig const& c, TVectorStream& ofAll, std::string const& seq, uint64_t& kmerCount) {
+  _processFasta(TConfig const& c, TStream& of, std::string const& seq, uint64_t& kmerCount) {
     std::string rcseq(seq);
     reverseComplement(rcseq);
     uint32_t seqlen = seq.size();
@@ -59,10 +59,10 @@ namespace dicey
       unsigned h2 = hash_string(rcseq.substr(seqlen - c.readlength - pos, c.readlength).c_str());
       if (h1 < h2) {
 	//std::cerr << h1 << '\t' << h2 << std::endl;
-	ofAll[kmerCount%c.nTmpFile] << h1 << '\t' << h2 << std::endl;
+	of << h1 << '\t' << h2 << std::endl;
       } else {
 	//std::cerr << h2 << '\t' << h1 << std::endl;
-	ofAll[kmerCount%c.nTmpFile] << h2 << '\t' << h1 << std::endl;
+	of << h2 << '\t' << h1 << std::endl;
       }
       ++kmerCount;
     }
@@ -148,7 +148,9 @@ namespace dicey
 	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Kmer hashes" << std::endl;
 	
 	// Output file
+	uint64_t lastKmerCount = 0;
 	uint64_t kmerCount = 0;
+	uint32_t fileIdx = 0;
 	std::vector<boost::iostreams::filtering_ostream> ofAll(c.nTmpFile);
 	for(uint32_t i = 0; i < c.nTmpFile; ++i) {
 	  std::string read1fq = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".hashes.gz";
@@ -166,11 +168,17 @@ namespace dicey
 	std::istream instream(&dataIn);
 	std::string line;
 	while(std::getline(instream, line)) {
-	  //if (kmerCount > 1000000) break;
+	  // Swap every 1M hashes chunk file
+	  if (kmerCount - lastKmerCount > 1000000) {
+	    lastKmerCount = kmerCount;
+	    ++fileIdx;
+	    if (fileIdx >= c.nTmpFile) fileIdx = 0;
+	  }
+	  //if (kmerCount > 1000030) break;
 	  if (!line.empty()) {
 	    if (line[0] == '>') {
 	      if (!tmpfasta.empty()) {
-		_processFasta(c, ofAll, tmpfasta, kmerCount);
+		_processFasta(c, ofAll[fileIdx], tmpfasta, kmerCount);
 		tmpfasta.clear();
 	      }
 	      if (line.at(line.length() - 1) == '\r' ){
@@ -187,7 +195,7 @@ namespace dicey
 	    }
 	  }
 	}
-	if (!tmpfasta.empty()) _processFasta(c, ofAll, tmpfasta, kmerCount);
+	if (!tmpfasta.empty()) _processFasta(c, ofAll[fileIdx], tmpfasta, kmerCount);
 	dataIn.pop();
 	dataIn.pop();
 	fafile.close();
