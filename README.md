@@ -60,7 +60,7 @@ The default output is a JSON file that can also be stored in a file.
 
 ## Graphical user interface
 
-You can search primers interactively using our web application [silica](https://gear.embl.de/silica/).
+You can search primers interactively using our web application [silica](https://www.gear-genomics.com/silica/).
 
 
 ## FAQ
