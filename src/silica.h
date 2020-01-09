@@ -304,10 +304,20 @@ namespace dicey
     }
     
     // Initialize thal arguments
-    if (!boost::filesystem::exists(c.primer3Config)) {
+    if ((!boost::filesystem::exists(c.primer3Config)) || (!boost::filesystem::is_directory(c.primer3Config))) {
       msg.push_back("Error: Cannot find primer3 config directory!");
       jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;
+    } else {
+      c.primer3Config.remove_trailing_separator();
+      c.primer3Config += boost::filesystem::path::preferred_separator;
+      boost::filesystem::path filePath = c.primer3Config;
+      filePath += "tetraloop.dh";
+      if (!boost::filesystem::exists(filePath)) {
+	msg.push_back("Error: Config directory path appears to be incorrect!");
+	jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
+	return 1;
+      }
     }
     primer3thal::thal_args a;
     primer3thal::set_thal_default_args(&a);
