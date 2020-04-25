@@ -7,7 +7,7 @@
 
 ## Installing dicey
 
-The easiest way to get Dicey is to download a statically linked binary from the [Dicey release page](https://github.com/gear-genomics/dicey/releases) or to download Dicey from [Bioconda](https://anaconda.org/bioconda/dicey). Building from source is also possible:
+Dicey is available as a [Bioconda package]((https://anaconda.org/bioconda/dicey), as a pre-compiled statically linked binary from [Dicey's github release page](https://github.com/gear-genomics/dicey/releases), as a singularity container[SIF file](https://github.com/gear-genomics/dicey/releases) or as a minimal [Docker container](https://hub.docker.com/r/geargenomics/dicey/).
 
 `apt-get install -y build-essential g++ cmake zlib1g-dev libbz2-dev liblzma-dev libboost-all-dev`
 
