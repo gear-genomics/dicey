@@ -1,15 +1,17 @@
 # use the ubuntu base image
-FROM ubuntu:14.04
+FROM ubuntu:18.04
 
 MAINTAINER Tobias Rausch rausch@embl.de
 
 # install packages
 RUN apt-get update && apt-get install -y \
+    autoconf \
     build-essential \
     cmake \
     g++ \
     gfortran \
     git \
+    libcurl4-gnutls-dev \
     hdf5-tools \
     libboost-date-time-dev \
     libboost-program-options-dev \
