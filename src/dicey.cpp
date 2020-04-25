@@ -51,6 +51,8 @@ int main(int argc, char **argv) {
   
   if ((std::string(argv[1]) == "version") || (std::string(argv[1]) == "--version") || (std::string(argv[1]) == "--version-only") || (std::string(argv[1]) == "-v")) {
     std::cout << "Dicey version: v" << diceyVersionNumber << std::endl;
+    std::cout << " using Boost: v" << BOOST_VERSION / 100000 << "." << BOOST_VERSION / 100 % 1000 << "." << BOOST_VERSION % 100 << std::endl;
+    std::cout << " using HTSlib: v" << hts_version() << std::endl;
     return 0;
   }
   else if ((std::string(argv[1]) == "help") || (std::string(argv[1]) == "--help") || (std::string(argv[1]) == "-h") || (std::string(argv[1]) == "-?")) {
@@ -63,7 +65,7 @@ int main(int argc, char **argv) {
     return 0;
   }
   else if ((std::string(argv[1]) == "license") || (std::string(argv[1]) == "--license") || (std::string(argv[1]) == "-l")) {
-    gplV3();
+    bsd();
     return 0;
   }
   else if ((std::string(argv[1]) == "index")) {

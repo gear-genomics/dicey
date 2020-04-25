@@ -60,9 +60,11 @@ namespace dicey
       if (h1 < h2) {
 	//std::cerr << h1 << '\t' << h2 << std::endl;
 	of << h1 << '\t' << h2 << std::endl;
+	//std::cout << h1 << '\t' << h2 << '\t' << seq.substr(pos, c.readlength) << '\t' << rcseq.substr(seqlen - c.readlength - pos, c.readlength) << std::endl;
       } else {
 	//std::cerr << h2 << '\t' << h1 << std::endl;
 	of << h2 << '\t' << h1 << std::endl;
+	//std::cout << h2 << '\t' << h1 << '\t' << rcseq.substr(seqlen - c.readlength - pos, c.readlength) << '\t' << seq.substr(pos, c.readlength) << std::endl;
       }
       ++kmerCount;
     }
