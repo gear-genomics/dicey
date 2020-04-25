@@ -14,8 +14,8 @@ bindir ?= $(exec_prefix)/bin
 
 # Flags
 CXX=g++
-CXXFLAGS += -std=c++14 -isystem ${JLIB} -isystem ${EBROOTHTSLIB} -isystem ${SDSL_ROOT}/include -pedantic -W -Wall -fvisibility=hidden
-LDFLAGS += -L${SDSL_ROOT}/lib -lboost_iostreams -lboost_filesystem -lboost_system -lboost_program_options -lboost_date_time -ldl -L${EBROOTHTSLIB} -L${EBROOTHTSLIB}/lib -lpthread
+CXXFLAGS += -std=c++14 -isystem ${JLIB} -isystem ${EBROOTHTSLIB} -isystem ${SDSL_ROOT}/include -pedantic -W -Wall
+LDFLAGS += -L${EBROOTHTSLIB} -L${EBROOTHTSLIB}/lib -L${SDSL_ROOT}/lib -lboost_iostreams -lboost_filesystem -lboost_system -lboost_program_options -lboost_date_time -ldl -lpthread
 
 ifeq (${STATIC}, 1)
 	LDFLAGS += -static -static-libgcc -pthread -lhts -lz -llzma -lbz2
@@ -40,7 +40,7 @@ endif
 
 # External sources
 SDSLSOURCES = $(wildcard src/xxsds/lib/*.cpp)
-DICEYSOURCES = $(wildcard src/*.cpp) $(wildcard src/*.h)
+SOURCES = $(wildcard src/*.cpp) $(wildcard src/*.h)
 HTSLIBSOURCES = $(wildcard src/htslib/*.c) $(wildcard src/htslib/*.h)
 PBASE=$(shell pwd)
 
@@ -54,9 +54,9 @@ all:   	$(TARGETS)
 	if [ -r src/xxsds/install.sh ]; then cd src/xxsds/ && ./install.sh ${PBASE}/src/sdslLite && cd ../../ && touch .sdsl; fi
 
 .htslib: $(HTSLIBSOURCES)
-	if [ -r src/htslib/Makefile ]; then cd src/htslib && make && make lib-static && cd ../../ && touch .htslib; fi
+	if [ -r src/htslib/Makefile ]; then cd src/htslib && autoheader && autoconf && ./configure --disable-s3 --disable-gcs --disable-libcurl --disable-plugins && $(MAKE) && $(MAKE) lib-static && cd ../../ && touch .htslib; fi
 
-src/dicey: ${SUBMODULES} ${DICEYSOURCES}
+src/dicey: ${SUBMODULES} ${SOURCES}
 	$(CXX) $(CXXFLAGS) $@.cpp -o $@ $(LDFLAGS)
 
 install: ${BUILT_PROGRAMS}
@@ -64,8 +64,7 @@ install: ${BUILT_PROGRAMS}
 	install -p ${BUILT_PROGRAMS} ${bindir}
 
 clean:
-	if [ -r src/htslib/Makefile ]; then cd src/htslib && make clean; fi
-	#if [ -r src/xxsds/install.sh ]; then cd src/xxsds/ && ./uninstall.sh ${PBASE}/src/sdslLite && cd ../../ && rm -rf src/sdslLite/; fi
+	if [ -r src/htslib/Makefile ]; then cd src/htslib && $(MAKE) clean; fi
 	if [ -r src/xxsds/install.sh ]; then rm -rf src/sdslLite/; fi
 	rm -f $(TARGETS) $(TARGETS:=.o) ${SUBMODULES}
 
