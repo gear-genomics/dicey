@@ -1,7 +1,8 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/dicey/README.html)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dicey/badges/downloads.svg)](https://anaconda.org/bioconda/dicey)
 [![Build Status](https://travis-ci.org/gear-genomics/dicey.svg?branch=master)](https://travis-ci.org/gear-genomics/dicey)
-[![GitHub license](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://raw.githubusercontent.com/gear-genomics/dicey/master/LICENSE)
+[![Docker Build](https://img.shields.io/docker/build/geargenomics/dicey.svg)](https://hub.docker.com/r/geargenomics/dicey/)
+[![GitHub license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/gear-genomics/dicey/blob/master/LICENSE)
 [![GitHub Releases](https://img.shields.io/github/release/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/releases)
 [![GitHub Issues](https://img.shields.io/github/issues/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/issues)
 
