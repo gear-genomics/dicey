@@ -38,6 +38,7 @@ namespace dicey
     bool sf;
     bool revcomp;
     bool hashing;
+    bool dumphash;
     uint32_t readlength;
     uint32_t isize;
     uint32_t nTmpFile;
@@ -60,11 +61,15 @@ namespace dicey
       if (h1 < h2) {
 	//std::cerr << h1 << '\t' << h2 << std::endl;
 	of << h1 << '\t' << h2 << std::endl;
-	//std::cout << h1 << '\t' << h2 << '\t' << seq.substr(pos, c.readlength) << '\t' << rcseq.substr(seqlen - c.readlength - pos, c.readlength) << std::endl;
+	if (c.dumphash) {
+	  std::cerr << h1 << '\t' << h2 << '\t' << seq.substr(pos, c.readlength) << '\t' << rcseq.substr(seqlen - c.readlength - pos, c.readlength) << std::endl;
+	}
       } else {
 	//std::cerr << h2 << '\t' << h1 << std::endl;
 	of << h2 << '\t' << h1 << std::endl;
-	//std::cout << h2 << '\t' << h1 << '\t' << rcseq.substr(seqlen - c.readlength - pos, c.readlength) << '\t' << seq.substr(pos, c.readlength) << std::endl;
+	if (c.dumphash) {
+	  std::cerr << h2 << '\t' << h1 << '\t' << rcseq.substr(seqlen - c.readlength - pos, c.readlength) << '\t' << seq.substr(pos, c.readlength) << std::endl;
+	}
       }
       ++kmerCount;
     }
@@ -93,6 +98,7 @@ namespace dicey
     hidden.add_options()
       ("input-file", boost::program_options::value<boost::filesystem::path>(&c.genome), "indexed genome")
       ("hashing,a", "output hashed reads")
+      ("dumphash,d", "dump hashed k-mers")
       ;
     
     boost::program_options::positional_options_description pos_args;
@@ -130,6 +136,8 @@ namespace dicey
       // Kmer mode
       c.hashing = true;
       c.se = true; // Always single-end, fwd and rev
+      if (vm.count("dumphash")) c.dumphash = true;
+      else c.dumphash = false;
     } else c.hashing = false;
 
     // Check genome
