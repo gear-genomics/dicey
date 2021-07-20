@@ -71,6 +71,21 @@ The primer3 config directory is included in the repository. Just clone the repos
 The `json2txt.py` python script is included in the repository. Just clone the repository `git clone --recursive https://github.com/gear-genomics/dicey.git` and then you will find the script in the `./scripts/` subdirectory.
 
 
+## Citation
+
+Dicey is part of the [GEAR genomics framework](https://www.gear-genomics.com) which is described in the below publication.
+
+Rausch, T., Fritz, M.H., Untergasser, A. and Benes, V.         
+Tracy: basecalling, alignment, assembly and deconvolution of sanger chromatogram trace files.             
+BMC Genomics 21, 230 (2020).             
+[https://doi.org/10.1186/s12864-020-6635-8](https://doi.org/10.1186/s12864-020-6635-8)
+
+
+## License
+
+Dicey is distributed under the BSD 3-Clause license. Consult the accompanying [LICENSE](https://github.com/gear-genomics/dicey/blob/master/LICENSE) file for more details.
+
+
 ## Questions
 
 In case of questions feel free to send us an [email](https://www-db.embl.de/EMBLPersonGroup-PersonPicture/MailForm/?recipient=ggenomics).
