@@ -5,7 +5,7 @@ namespace dicey
 {
 
 
-  std::string diceyVersionNumber = "0.1.7";
+  std::string diceyVersionNumber = "0.1.8";
 
   inline 
   void printTitle(std::string const& title) 
