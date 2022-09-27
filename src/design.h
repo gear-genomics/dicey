@@ -29,6 +29,8 @@
 #include "needle.h"
 #include "thal.h"
 #include "util.h"
+#include "gtf.h"
+#include "gff3.h"
 
 using namespace sdsl;
 
@@ -60,12 +62,17 @@ namespace dicey
     std::size_t post_context;
     std::size_t max_locations;
     std::string format;
+    std::string idname;
+    std::string feature;
+    std::vector<std::string> chrname;
+    std::map<std::string, int32_t> nchr;
+    boost::filesystem::path gtfFile;
     boost::filesystem::path primer3Config;
     boost::filesystem::path outfile;
     boost::filesystem::path infile;
     boost::filesystem::path genome;
   };
-  
+
   int design(int argc, char** argv) {
     DesignConfig c;
     
@@ -74,6 +81,7 @@ namespace dicey
     generic.add_options()
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
+      ("gtf,t", boost::program_options::value<boost::filesystem::path>(&c.gtfFile), "gtf/gff3 file")
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile), "output file")
       ;
@@ -129,26 +137,6 @@ namespace dicey
       std::cout << visible_options << "\n";
       return -1;
     }
-    
-    // Cmd switches
-    if (!vm.count("hamming")) c.indel = true;
-    else c.indel = false;
-    if (vm.count("outfile")) c.hasOutfile = true;
-    else c.hasOutfile = false;
-    if (vm.count("pruneprimer")) c.pruneprimer = true;
-    else c.pruneprimer = false;
-
-    // DNA Hits
-    typedef std::vector<PrimerBind> TPrimerBinds;
-    TPrimerBinds allp;
-    typedef std::vector<PcrProduct> TPcrProducts;
-    TPcrProducts pcrColl;
-    std::vector<uint32_t> seqlen;
-    std::vector<std::string> seqname;
-    std::vector<std::string> pName;
-    std::vector<std::string> pSeq;
-
-    
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
@@ -180,7 +168,9 @@ namespace dicey
     a.dv = c.dv;
     a.dna_conc = c.dna_conc;
     a.dntp = c.dntp;
-    
+    // Fix provided Temperature
+    a.temp += primer3thal::ABSOLUTE_ZERO;
+            
     // Set prefix and suffix based on edit distance
     c.pre_context = 0;
     c.post_context = 0;
@@ -188,16 +178,73 @@ namespace dicey
       c.pre_context += c.distance;
       c.post_context += c.distance;
     }
+
+    // Cmd switches
+    if (!vm.count("hamming")) c.indel = true;
+    else c.indel = false;
+    if (vm.count("outfile")) c.hasOutfile = true;
+    else c.hasOutfile = false;
+    if (vm.count("pruneprimer")) c.pruneprimer = true;
+    else c.pruneprimer = false;
     
-    // Fix provided Temperature
-    a.temp += primer3thal::ABSOLUTE_ZERO;
-    
-    // Parse chromosome lengths
-    uint32_t nseq = getSeqLenName(c, seqlen, seqname);
-    if (!nseq) {
-      std::cerr << "Error: Could not retrieve sequence lengths!" << std::endl;
-      return 1;
+    // Fill genome map
+    if (c.nchr.empty()) {
+      faidx_t* fai = fai_load(c.genome.string().c_str());
+      c.chrname.resize(faidx_nseq(fai));
+      for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
+	std::string chrName = faidx_iseq(fai, refIndex);
+	//std::cerr << chrName << ',' << refIndex << std::endl;
+	c.nchr.insert(std::make_pair(chrName, refIndex));
+	c.chrname[refIndex] = chrName;
+      }
+      fai_destroy(fai);
     }
+
+    // Filter exon IDs
+    c.idname = "gene_id";
+    c.feature = "exon";
+    
+    // Parse exons
+    typedef std::vector<IntervalLabel> TChromosomeRegions;
+    typedef std::vector<TChromosomeRegions> TGenomicRegions;
+    TGenomicRegions gRegions;
+    gRegions.resize(c.nchr.size(), TChromosomeRegions());
+    typedef std::vector<std::string> TGeneIds;
+    TGeneIds geneIds;
+    typedef std::vector<bool> TProteinCoding;
+    TProteinCoding pCoding;
+    parseGTF(c, gRegions, geneIds, pCoding);
+    
+
+    // Parse chromosomes
+    faidx_t* fai = fai_load(c.genome.string().c_str());	
+    for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
+      for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
+	if ((geneIds[gRegions[refIndex][i].lid] != "ENSG00000164692") && (geneIds[gRegions[refIndex][i].lid] != "ENSG00000172270")) continue;
+	//std::cerr << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t' << gRegions[refIndex][i].strand << '\t' << gRegions[refIndex][i].lid << '\t' << geneIds[gRegions[refIndex][i].lid] << '\t' << pCoding[gRegions[refIndex][i].lid] << std::endl;
+	int32_t seqlen;
+	char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
+	std::string exonseq = boost::to_upper_copy(std::string(seq));
+
+
+	std::cerr << exonseq << std::endl;
+	free(seq);
+      }
+    }
+    fai_destroy(fai);
+    exit(-1);
+    
+
+
+    // DNA Hits
+    typedef std::vector<PrimerBind> TPrimerBinds;
+    TPrimerBinds allp;
+    typedef std::vector<PcrProduct> TPcrProducts;
+    TPcrProducts pcrColl;
+    std::vector<uint32_t> seqlen;
+    std::vector<std::string> seqname;
+    std::vector<std::string> pName;
+    std::vector<std::string> pSeq;
 
     // Reference index
     csa_wt<> fm_index;  
@@ -221,8 +268,8 @@ namespace dicey
     
     // Query FM-Index
     typedef std::vector<TPrimerBinds> TChrPrimerBinds;
-    TChrPrimerBinds forBind(nseq, TPrimerBinds());
-    TChrPrimerBinds revBind(nseq, TPrimerBinds());
+    TChrPrimerBinds forBind(c.chrname.size(), TPrimerBinds());
+    TChrPrimerBinds revBind(c.chrname.size(), TPrimerBinds());
     for(uint32_t primerId = 0; primerId < pSeq.size(); ++primerId) {
       // Thermodynamic calculation
       std::string forQuery = pSeq[primerId];
@@ -370,7 +417,7 @@ namespace dicey
     }
 
     // Collect all primers
-    for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
+    for(uint32_t refIndex = 0; refIndex < c.chrname.size(); ++refIndex) {
       allp.insert( allp.end(), forBind[refIndex].begin(), forBind[refIndex].end() );
       allp.insert( allp.end(), revBind[refIndex].begin(), revBind[refIndex].end() );
     }
@@ -382,7 +429,7 @@ namespace dicey
     if (c.pruneprimer) {
       //jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
     } else {
-      for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
+      for(uint32_t refIndex = 0; refIndex < c.chrname.size(); ++refIndex) {
 	for(TPrimerBinds::iterator fw = forBind[refIndex].begin(); fw != forBind[refIndex].end(); ++fw) {
 	  for(TPrimerBinds::iterator rv = revBind[refIndex].begin(); rv != revBind[refIndex].end(); ++rv) {
 	    if ((rv->pos > fw->pos) && (rv->pos - fw->pos < c.maxProdSize)) {
