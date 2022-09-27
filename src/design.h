@@ -221,13 +221,79 @@ namespace dicey
     for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
       for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
 	if ((geneIds[gRegions[refIndex][i].lid] != "ENSG00000164692") && (geneIds[gRegions[refIndex][i].lid] != "ENSG00000172270")) continue;
-	//std::cerr << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t' << gRegions[refIndex][i].strand << '\t' << gRegions[refIndex][i].lid << '\t' << geneIds[gRegions[refIndex][i].lid] << '\t' << pCoding[gRegions[refIndex][i].lid] << std::endl;
+	std::cerr << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t' << gRegions[refIndex][i].strand << '\t' << gRegions[refIndex][i].lid << '\t' << geneIds[gRegions[refIndex][i].lid] << '\t' << pCoding[gRegions[refIndex][i].lid] << std::endl;
+
+	// Parameters
+	uint32_t armlen = 20;
+	uint32_t targetlen = 2 * armlen;
+	double armTMMax = 60;
+	double armTMDiff = 2;
+	double probeTMMin = 65;
+	double probeTMMax = 75;
+	double minGC = 0.4;
+	double maxGC = 0.6;
+	
 	int32_t seqlen;
 	char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
 	std::string exonseq = boost::to_upper_copy(std::string(seq));
+	if (gRegions[refIndex][i].strand == '-') revcomplement(exonseq);
+	uint32_t exonlen = exonseq.size();
+	if (exonlen >= targetlen) {
+	  std::string rexonseq(exonseq);
+	  revcomplement(rexonseq);
+	  for(uint32_t k = 0; k < (exonlen - targetlen + 1); ++k) {
+	    // Arm1
+	    std::string arm1 = exonseq.substr(k, armlen);
+	    double arm1GC = gccontent(arm1);
+	    if ((arm1GC < minGC) || (arm1GC > maxGC)) continue;
+	    std::string rarm1 = rexonseq.substr(exonlen - armlen - k, armlen);
+	    primer3thal::oligo1 = (unsigned char*) arm1.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rarm1.c_str();
+	    primer3thal::thal_results oiarm1;
+	    bool thalsuccess1 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiarm1);
+	    if ((!thalsuccess1) || (oiarm1.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
+	    }
+	    double arm1TM = oiarm1.temp;
+	    if (arm1TM > armTMMax) continue;
 
+	    // Arm2
+	    std::string arm2 = exonseq.substr(k + armlen, armlen);
+	    double arm2GC = gccontent(arm2);
+	    if ((arm2GC < minGC) || (arm2GC > maxGC)) continue;
+	    std::string rarm2 = rexonseq.substr(exonlen - armlen - (k + armlen), armlen);
+	    primer3thal::oligo1 = (unsigned char*) arm2.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rarm2.c_str();
+	    primer3thal::thal_results oiarm2;
+	    bool thalsuccess2 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiarm2);
+	    if ((!thalsuccess2) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
+	    }
+	    double arm2TM = oiarm2.temp;
+	    if ((arm2TM > armTMMax) || (std::abs(arm1TM - arm2TM) > armTMDiff)) continue;
 
-	std::cerr << exonseq << std::endl;
+	    // Probe
+	    std::string probe = exonseq.substr(k, targetlen);
+	    double probeGC = gccontent(probe);
+	    if ((probeGC < minGC) || (probeGC > maxGC)) continue;
+	    std::string rprobe = rexonseq.substr(exonlen - targetlen - k, targetlen);
+	    primer3thal::oligo1 = (unsigned char*) probe.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rprobe.c_str();
+	    primer3thal::thal_results oiprobe;
+	    bool thalsuccess3 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiprobe);
+	    if ((!thalsuccess3) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
+	    }
+	    double probeTM = oiprobe.temp;
+	    if ((probeTM < probeTMMin) || (probeTM > probeTMMax)) continue;
+
+	    // Output
+	    std::cerr << arm1 << '-' << arm2 << ",TM:" << arm1TM << ',' << arm2TM << ',' << probeTM << ",GC:" << arm1GC << ',' << arm2GC << ',' << probeGC << std::endl;
+	  }
+	}
 	free(seq);
       }
     }
@@ -252,12 +318,6 @@ namespace dicey
     std::string index_file = op.string() + ".fm9";
     if (!load_from_checked_file(fm_index, index_file)) {
       std::cerr << "Error: FM-Index cannot be loaded!" << std::endl;
-      return 1;
-    }
-    
-    // Parse input fasta
-    if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
-      std::cerr << "Error: Input fasta file is missing!" << std::endl;
       return 1;
     }
     

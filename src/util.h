@@ -75,6 +75,52 @@ namespace dicey
     else return false;
   }
 
+  inline char
+  complement(char n) {
+    switch(n) {
+    case 'A':
+      return 'T';
+    case 'T':
+      return 'A';
+    case 'G':
+      return 'C';
+    case 'C':
+      return 'G';
+    }
+    return 'N';
+  }
+
+  inline void
+  revcomplement(std::string& nucs) {
+    for(std::string::iterator it = nucs.begin(); it != nucs.end(); ++it) *it = complement(*it);
+    std::reverse(nucs.begin(), nucs.end());
+  }
+
+  inline double
+  gccontent(std::string& nucs) {
+    uint32_t gc = 0;
+    for(std::string::iterator it = nucs.begin(); it != nucs.end(); ++it) {
+      if (*it == 'N') return -1;
+      else if ((*it == 'C') || (*it == 'G')) ++gc;
+    }
+    return (double) gc / (double) nucs.size();
+  }
+  
+  inline void
+  reverseComplement(std::string& sequence) {
+    std::string rev = boost::to_upper_copy(std::string(sequence.rbegin(), sequence.rend()));
+    std::size_t i = 0;
+    for(std::string::iterator revIt = rev.begin(); revIt != rev.end(); ++revIt, ++i) {
+      switch (*revIt) {
+      case 'A': sequence[i]='T'; break;
+      case 'C': sequence[i]='G'; break;
+      case 'G': sequence[i]='C'; break;
+      case 'T': sequence[i]='A'; break;
+      case 'N': sequence[i]='N'; break;
+      default: break;
+      }
+    }
+  }
   
   inline bool
   nContent(std::string const& s) {
