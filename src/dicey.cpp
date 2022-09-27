@@ -18,6 +18,7 @@
 #include "silica.h"
 #include "mapbam.h"
 #include "mappability.h"
+#include "design.h"
 
 using namespace dicey;
 
@@ -30,6 +31,7 @@ displayUsage() {
   std::cout << "    index        index FASTA reference file" << std::endl;
   std::cout << "    hunt         search DNA sequences" << std::endl;
   std::cout << "    search       in-silico PCR" << std::endl;
+  //std::cout << "    design       probe design" << std::endl;
   std::cout << std::endl;
   std::cout << std::endl;
   std::cout << "Mappability:" << std::endl;
@@ -73,6 +75,9 @@ int main(int argc, char **argv) {
   }
   else if ((std::string(argv[1]) == "hunt")) {
     return hunter(argc-1,argv+1);
+  }
+  else if ((std::string(argv[1]) == "design")) {
+    return design(argc-1,argv+1);
   }
   else if ((std::string(argv[1]) == "search")) {
     return silica(argc-1,argv+1);
