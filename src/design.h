@@ -40,12 +40,13 @@ namespace dicey
   struct DesignConfig {
     bool indel;
     bool nonprotein;
+    bool computeAll;
+    uint32_t distance;
     double temp;
     double mv;
     double dv;
     double dna_conc;
     double dntp;
-    std::string genename;
     std::string idname;
     std::string feature;
     std::vector<std::string> chrname;
@@ -55,6 +56,7 @@ namespace dicey
     boost::filesystem::path primer3Config;
     boost::filesystem::path outfile;
     boost::filesystem::path genome;
+    boost::filesystem::path infile;
   };
 
   int design(int argc, char** argv) {
@@ -65,6 +67,7 @@ namespace dicey
     generic.add_options()
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
+      ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("gtf,t", boost::program_options::value<boost::filesystem::path>(&c.gtfFile), "gtf/gff3 file")
       ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
@@ -84,11 +87,11 @@ namespace dicey
     
     boost::program_options::options_description hidden("Hidden options");
     hidden.add_options()
-      ("genename", boost::program_options::value<std::string>(&c.genename), "[all|ENSG00000164692|...]")
+      ("infile", boost::program_options::value<boost::filesystem::path>(&c.infile), "gene.lst")
       ;
     
     boost::program_options::positional_options_description pos_args;
-    pos_args.add("genename", -1);
+    pos_args.add("infile", -1);
     
     boost::program_options::options_description cmdline_options;
     cmdline_options.add(generic).add(tmcalc).add(hidden);
@@ -99,8 +102,8 @@ namespace dicey
     boost::program_options::notify(vm);
 
     // Check command line arguments
-    if ((vm.count("help")) || (!vm.count("genename")) || (!vm.count("genome")) || (!vm.count("barcodes")) || (!vm.count("gtf"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> [all|ENSG00000164692|...]" << std::endl;
+    if ((vm.count("help")) || (!vm.count("infile")) || (!vm.count("genome")) || (!vm.count("barcodes")) || (!vm.count("gtf"))) {
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> <gene.list.file>" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
@@ -113,7 +116,7 @@ namespace dicey
     
     // Parameters
     uint32_t maxNeighborHits = 0;
-    if (c.indel) maxNeighborHits = 2; // first base deletion and last base deletion give a hit 
+    if (c.indel) maxNeighborHits = 2 * c.distance; // first base deletion and last base deletion give a hit 
     double armTMMax = 60;
     double armTMDiff = 2;
     double probeTMMin = 65;
@@ -128,6 +131,34 @@ namespace dicey
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
       std::cerr << "Error: Genome does not exist!" << std::endl;
       return 1;
+    }
+
+    // Check gene list
+    std::set<std::string> geneset;
+    c.computeAll = false;
+    if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
+      if (c.infile.string() == "all") c.computeAll = true;
+      else {
+	std::cerr << "Error: Gene list does not exist!" << std::endl;
+	return 1;
+      }
+    } else {
+      std::ifstream geneFile(c.infile.string().c_str(), std::ifstream::in);
+      if (geneFile.is_open()) {
+        while (geneFile.good()) {
+          std::string gline;
+          getline(geneFile, gline);
+          typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
+          boost::char_separator<char> sep(" \t,;");
+          Tokenizer tokens(gline, sep);
+          Tokenizer::iterator tokIter = tokens.begin();
+          if (tokIter!=tokens.end()) {
+            std::string geneName=*tokIter++;
+	    geneset.insert(geneName);
+	  }
+	}
+	geneFile.close();
+      }
     }
     
     // Initialize thal arguments
@@ -200,7 +231,7 @@ namespace dicey
 	  return 1;
 	}
 	while ((numBarcodes < barcodes.size()) && (!c.nonprotein) && (!pCoding[numBarcodes])) ++numBarcodes;
-	while ((numBarcodes < barcodes.size()) && (c.genename != "all") && (geneIds[numBarcodes] != c.genename)) ++numBarcodes;
+	while ((numBarcodes < barcodes.size()) && (!c.computeAll) && (geneset.find(geneIds[numBarcodes]) == geneset.end())) ++numBarcodes;
 	if (numBarcodes < barcodes.size()) barcodes[numBarcodes] = boost::to_upper_copy(std::string(seq));
 	++numBarcodes;
 	free(seq);
@@ -234,8 +265,8 @@ namespace dicey
       uint32_t targetlen = 2 * armlen;
       for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
 	for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
-	  if ((c.genename == "all") && (!c.nonprotein) && (!pCoding[gRegions[refIndex][i].lid])) continue;
-	  if ((c.genename != "all") && (c.genename != geneIds[gRegions[refIndex][i].lid])) continue;
+	  if ((c.computeAll) && (!c.nonprotein) && (!pCoding[gRegions[refIndex][i].lid])) continue;
+	  if ((!c.computeAll) && (geneset.find(geneIds[gRegions[refIndex][i].lid]) == geneset.end())) continue;
 
 	  int32_t seqlen;
 	  char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
@@ -298,8 +329,8 @@ namespace dicey
 	      typedef std::set<std::string> TStringSet;
 	      typedef std::vector<TStringSet> TFwdRevSearchSets;
 	      TFwdRevSearchSets fwrv(2, TStringSet());
-	      neighbors(arm1, alphabet, 1, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
-	      neighbors(rarm1, alphabet, 1, c.indel, 10000, fwrv[1]);
+	      neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
+	      neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
 	      std::vector<uint32_t> hits(2, 0);
 	      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
 		for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
@@ -313,8 +344,8 @@ namespace dicey
 	      // Search neighbors of arm2
 	      fwrv.clear();
 	      fwrv.resize(2, TStringSet());
-	      neighbors(arm2, alphabet, 1, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
-	      neighbors(rarm2, alphabet, 1, c.indel, 10000, fwrv[1]);
+	      neighbors(arm2, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
+	      neighbors(rarm2, alphabet, c.distance, c.indel, 10000, fwrv[1]);
 	      hits.clear();
 	      hits.resize(2, 0);
 	      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {

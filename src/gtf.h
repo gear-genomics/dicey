@@ -88,15 +88,10 @@ namespace dicey {
 	    Tokenizer::iterator kvTokensIt = kvTokens.begin();
 	    std::string key = *kvTokensIt++;
 	    if (key == c.idname) {
-	      std::string val = *kvTokensIt;
-	      if (val.size() >= 3) val = val.substr(1, val.size()-2); // Trim off the bloody "
-	      int32_t idval = geneIds.size();
-	      typename TIdMap::const_iterator idIter = idMap.find(val);
-	      if (idIter == idMap.end()) {
-		idMap.insert(std::make_pair(val, idval));
-		geneIds.push_back(val);
-		// Protein Coding?
-		bool pCode = false;
+	      // Protein-coding exon?
+	      bool includeExon = true; 
+	      if (!c.nonprotein) {
+		includeExon = false;
 		for(Tokenizer::iterator arIter = attrTokens.begin(); arIter != attrTokens.end(); ++arIter) {
 		  std::string kvl = *arIter;
 		  boost::trim(kvl);
@@ -104,25 +99,50 @@ namespace dicey {
 		  Tokenizer kvT2(kvl, sKV2);
 		  Tokenizer::iterator kvT2It = kvT2.begin();
 		  std::string procod = *kvT2It++;
-		  if (procod == "gene_biotype") {
+		  if (procod == "transcript_biotype") {
 		    std::string gbio = *kvT2It;
 		    if (gbio.size() >= 3) gbio = gbio.substr(1, gbio.size()-2);
-		    if (gbio == "protein_coding") pCode = true;
+		    if (gbio == "protein_coding") includeExon = true;
 		  }
 		}
-		pCoding.push_back(pCode);
-	      } else idval = idIter->second;
-	      // Convert to 0-based and right-open
-	      if (start == 0) {
-		std::cerr << "GTF is 1-based format!" << std::endl;
-		return 0;
 	      }
-	      if (start > end) {
-		std::cerr << "Feature start is greater than feature end!" << std::endl;
-		return 0;
+	      if (includeExon) {
+		std::string val = *kvTokensIt;
+		if (val.size() >= 3) val = val.substr(1, val.size()-2); // Trim off the bloody "
+		int32_t idval = geneIds.size();
+		typename TIdMap::const_iterator idIter = idMap.find(val);
+		if (idIter == idMap.end()) {
+		  idMap.insert(std::make_pair(val, idval));
+		  geneIds.push_back(val);
+		  // Protein Coding?
+		  bool pCode = false;
+		  for(Tokenizer::iterator arIter = attrTokens.begin(); arIter != attrTokens.end(); ++arIter) {
+		    std::string kvl = *arIter;
+		    boost::trim(kvl);
+		    boost::char_separator<char> sKV2(" ");
+		    Tokenizer kvT2(kvl, sKV2);
+		    Tokenizer::iterator kvT2It = kvT2.begin();
+		    std::string procod = *kvT2It++;
+		    if (procod == "gene_biotype") {
+		      std::string gbio = *kvT2It;
+		      if (gbio.size() >= 3) gbio = gbio.substr(1, gbio.size()-2);
+		      if (gbio == "protein_coding") pCode = true;
+		    }
+		  }
+		  pCoding.push_back(pCode);
+		} else idval = idIter->second;
+		// Convert to 0-based and right-open
+		if (start == 0) {
+		  std::cerr << "GTF is 1-based format!" << std::endl;
+		  return 0;
+		}
+		if (start > end) {
+		  std::cerr << "Feature start is greater than feature end!" << std::endl;
+		  return 0;
+		}
+		//std::cerr << geneIds[idval] << "\t" << start << "\t" << end << std::endl;
+		_insertInterval(overlappingRegions[chrid], start - 1, end, strand, idval, eid++);
 	      }
-	      //std::cerr << geneIds[idval] << "\t" << start << "\t" << end << std::endl;
-	      _insertInterval(overlappingRegions[chrid], start - 1, end, strand, idval, eid++);
 	    }
 	  }
 	}
