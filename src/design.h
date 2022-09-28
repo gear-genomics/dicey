@@ -38,17 +38,7 @@ namespace dicey
 {
 
   struct DesignConfig {
-    bool indel;
-    
-    double cutTemp;
-    uint32_t maxProdSize;
-    double cutofPen;
-    double penDiff;
-    double penMis;
-    double penLen;
-    uint32_t distance;
-    uint32_t maxPruneCount;
-    // Primer3
+    bool indel;    
     double temp;
     double mv;
     double dv;
@@ -80,16 +70,6 @@ namespace dicey
       ("hamming,n", "use hamming neighborhood instead of edit distance")
       ;
 
-    boost::program_options::options_description score("Parameters for Scoring and Penalty Calculation");
-    score.add_options()
-      ("cutTemp,c", boost::program_options::value<double>(&c.cutTemp)->default_value(45.0), "min. primer melting temperature")
-      ("maxProdSize,l", boost::program_options::value<uint32_t>(&c.maxProdSize)->default_value(15000), "max. PCR Product size")
-      ("cutoffPenalty", boost::program_options::value<double>(&c.cutofPen)->default_value(-1.0), "max. penalty for products (-1 = keep all)")
-      ("penaltyTmDiff", boost::program_options::value<double>(&c.penDiff)->default_value(0.6), "multiplication factor for deviation of primer Tm penalty")
-      ("penaltyTmMismatch", boost::program_options::value<double>(&c.penMis)->default_value(0.4), "multiplication factor for Tm pair difference penalty")
-      ("penaltyLength", boost::program_options::value<double>(&c.penLen)->default_value(0.001), "multiplication factor for amplicon length penalty")
-      ;
-
     boost::program_options::options_description tmcalc("Parameters for Tm Calculation");
     tmcalc.add_options()
       ("enttemp", boost::program_options::value<double>(&c.temp)->default_value(37.0), "temperature for entropie and entalpie calculation in Celsius")
@@ -108,9 +88,9 @@ namespace dicey
     pos_args.add("input-file", -1);
     
     boost::program_options::options_description cmdline_options;
-    cmdline_options.add(generic).add(score).add(tmcalc).add(hidden);
+    cmdline_options.add(generic).add(tmcalc).add(hidden);
     boost::program_options::options_description visible_options;
-    visible_options.add(generic).add(score).add(tmcalc);
+    visible_options.add(generic).add(tmcalc);
     boost::program_options::variables_map vm;
     boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(cmdline_options).positional(pos_args).run(), vm);
     boost::program_options::notify(vm);
