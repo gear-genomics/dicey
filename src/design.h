@@ -44,7 +44,7 @@ namespace dicey
     double dv;
     double dna_conc;
     double dntp;
-    std::string format;
+    std::string genename;
     std::string idname;
     std::string feature;
     std::vector<std::string> chrname;
@@ -52,7 +52,6 @@ namespace dicey
     boost::filesystem::path gtfFile;
     boost::filesystem::path primer3Config;
     boost::filesystem::path outfile;
-    boost::filesystem::path infile;
     boost::filesystem::path genome;
   };
 
@@ -81,11 +80,11 @@ namespace dicey
     
     boost::program_options::options_description hidden("Hidden options");
     hidden.add_options()
-      ("input-file", boost::program_options::value<boost::filesystem::path>(&c.infile), "seq.fasta")
+      ("genename", boost::program_options::value<std::string>(&c.genename), "[all|ENSG00000164692|...]")
       ;
     
     boost::program_options::positional_options_description pos_args;
-    pos_args.add("input-file", -1);
+    pos_args.add("genename", -1);
     
     boost::program_options::options_description cmdline_options;
     cmdline_options.add(generic).add(tmcalc).add(hidden);
@@ -96,8 +95,8 @@ namespace dicey
     boost::program_options::notify(vm);
 
     // Check command line arguments
-    if ((vm.count("help")) || (!vm.count("input-file")) || (!vm.count("genome"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> sequences.fasta" << std::endl;
+    if ((vm.count("help")) || (!vm.count("genename")) || (!vm.count("genome"))) {
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> [all|ENSG00000164692|...]" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
