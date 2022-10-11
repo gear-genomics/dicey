@@ -265,6 +265,7 @@ namespace dicey
       uint32_t targetlen = 2 * armlen;
       for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
 	for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
+	  //std::cerr << c.chrname[refIndex] << '\t' << gRegions[refIndex][i].start << '\t' << gRegions[refIndex][i].end << '\t' << gRegions[refIndex][i].strand << '\t' << geneIds[gRegions[refIndex][i].lid] << std::endl;
 	  if ((c.computeAll) && (!c.nonprotein) && (!pCoding[gRegions[refIndex][i].lid])) continue;
 	  if ((!c.computeAll) && (geneset.find(geneIds[gRegions[refIndex][i].lid]) == geneset.end())) continue;
 
