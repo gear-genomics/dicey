@@ -66,7 +66,7 @@ namespace dicey {
 	return 0;
       }
       std::string ft = *tokIter++;
-      if (ft == c.feature) {
+      if (ft == "exon") {    // Select exons
 	if (tokIter != tokens.end()) {
 	  int32_t start = boost::lexical_cast<int32_t>(*tokIter++);
 	  int32_t end = boost::lexical_cast<int32_t>(*tokIter++);
@@ -87,7 +87,7 @@ namespace dicey {
 	    Tokenizer kvTokens(keyval, sepKeyVal);
 	    Tokenizer::iterator kvTokensIt = kvTokens.begin();
 	    std::string key = *kvTokensIt++;
-	    if (key == c.idname) {
+	    if (key == "gene_id") {     // Select gene_id
 	      // Protein-coding exon?
 	      bool includeExon = true; 
 	      if (!c.nonprotein) {

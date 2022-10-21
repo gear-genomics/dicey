@@ -30,7 +30,6 @@
 #include "thal.h"
 #include "util.h"
 #include "gtf.h"
-#include "gff3.h"
 
 using namespace sdsl;
 
@@ -47,8 +46,6 @@ namespace dicey
     double dv;
     double dna_conc;
     double dntp;
-    std::string idname;
-    std::string feature;
     std::string anchor;
     std::string spacerleft;
     std::string spacerright;    
@@ -395,10 +392,6 @@ namespace dicey
       fai_destroy(fai);
     }
 
-    // Filter exon IDs
-    c.idname = "gene_id";
-    c.feature = "exon";
-    
     // Check gene list
     c.computeAll = false;
     if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
