@@ -114,11 +114,9 @@ namespace dicey
     typedef std::vector<GeneInfo> TGeneInfo;
     TGeneInfo geneInfo;
     parseGTF(c, gRegions, geneInfo);
-
+    
     // Load barcodes
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Load barcodes" << std::endl;
-    typedef std::vector<std::string> TBarcodes;
-    TBarcodes barcodes(geneInfo.size(), "NNNNNNNNNNNNNNNNNNNN");
     uint32_t numBarcodes = 0;
     if (!numBarcodes) {
       faidx_t* fai = fai_load(c.barcodes.string().c_str());
@@ -129,14 +127,13 @@ namespace dicey
 	  std::cerr << "Invalid barcode length! Should be 20bp." << std::endl;
 	  return 1;
 	}
-	while ((numBarcodes < barcodes.size()) && (!c.nonprotein) && (!geneInfo[numBarcodes].pcoding)) ++numBarcodes;
-	while ((numBarcodes < barcodes.size()) && (!c.computeAll) && (c.geneset.find(geneInfo[numBarcodes].id) == c.geneset.end())) ++numBarcodes;
-	if (numBarcodes < barcodes.size()) barcodes[numBarcodes] = boost::to_upper_copy(std::string(seq));
+	if (numBarcodes < geneInfo.size()) geneInfo[numBarcodes].barcode = boost::to_upper_copy(std::string(seq));
 	++numBarcodes;
 	free(seq);
       }
       fai_destroy(fai);
     }
+    
     // Reference index
     csa_wt<> fm_index;  
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
@@ -154,7 +151,7 @@ namespace dicey
     // Outfile
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Compute padlocks" << std::endl;
     std::ofstream ofile(c.outfile.string().c_str());
-    ofile << "Gene\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
+    ofile << "Gene\tSymbol\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
     faidx_t* fai = fai_load(c.genome.string().c_str());
     for(uint32_t armlen = 20; armlen < 21; ++armlen) {
@@ -254,12 +251,12 @@ namespace dicey
 	      if (hits[0] + hits[1] > maxNeighborHits) continue;
 
 	      // Final padlock
-	      std::string padlock = rarm1 + c.spacerleft + c.anchor + barcodes[gRegions[refIndex][i].lid] + c.spacerright + rarm2;
+	      std::string padlock = rarm1 + c.spacerleft + c.anchor + geneInfo[gRegions[refIndex][i].lid].barcode + c.spacerright + rarm2;
 	      double padlockGC = gccontent(padlock);
 	      if ((padlockGC < minGC) || (padlockGC > maxGC)) continue;
 
 	      // Barcode
-	      std::string bartmp = barcodes[gRegions[refIndex][i].lid];
+	      std::string bartmp = geneInfo[gRegions[refIndex][i].lid].barcode;
 	      double barGC = gccontent(bartmp);
 	      std::string rbartmp(bartmp);
 	      revcomplement(rbartmp);
@@ -274,9 +271,14 @@ namespace dicey
 	      double barTM = oibartmp.temp;
 	      
 	      // Output
-	      ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t' << gRegions[refIndex][i].strand << '\t' << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
+	      ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
+	      ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
+	      ofile << gRegions[refIndex][i].strand << '\t';
+	      ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
 	      ofile << arm1 << '-' << arm2 << '\t';
-	      ofile << c.spacerleft << '\t' << c.anchor << '\t' << barcodes[gRegions[refIndex][i].lid] << '\t' << c.spacerright << '\t';
+	      ofile << c.spacerleft << '\t' << c.anchor << '\t';
+	      ofile << geneInfo[gRegions[refIndex][i].lid].barcode << '\t';
+	      ofile << c.spacerright << '\t';
 	      ofile << padlock << '\t';
 	      ofile << arm1TM << '\t' << arm2TM << '\t' << barTM << '\t' << probeTM << '\t';
 	      ofile << arm1GC << '\t' << arm2GC << '\t' << barGC << '\t' << probeGC << std::endl;

@@ -20,8 +20,10 @@ namespace dicey {
   struct GeneInfo {
     bool pcoding;
     std::string id;
-
-    GeneInfo(bool const p, std::string const& idname) : pcoding(p), id(idname) {}
+    std::string symbol;
+    std::string barcode;
+    
+    GeneInfo(bool const p, std::string const& idname, std::string const& sym) : pcoding(p), id(idname), symbol(sym), barcode("NNNNNNNNNNNNNNNNNNNN") {}
   };
   
   
@@ -169,15 +171,16 @@ namespace dicey {
 		  }
 		}
 	      }
-	      if (includeExon) {
-		std::string val = *kvTokensIt;
-		if (val.size() >= 3) val = val.substr(1, val.size()-2); // Trim off the bloody "
+	      std::string ensgene = *kvTokensIt;
+	      if (ensgene.size() >= 3) ensgene = ensgene.substr(1, ensgene.size()-2); // Trim off the bloody "
+	      if ((includeExon) && ((c.computeAll) || (c.geneset.find(ensgene) != c.geneset.end()))) {
 		int32_t idval = geneInfo.size();
-		typename TIdMap::const_iterator idIter = idMap.find(val);
+		typename TIdMap::const_iterator idIter = idMap.find(ensgene);
 		if (idIter == idMap.end()) {
-		  idMap.insert(std::make_pair(val, idval));
+		  idMap.insert(std::make_pair(ensgene, idval));
 		  // Protein Coding?
 		  bool pCode = false;
+		  std::string symbol = "n.a.";
 		  for(Tokenizer::iterator arIter = attrTokens.begin(); arIter != attrTokens.end(); ++arIter) {
 		    std::string kvl = *arIter;
 		    boost::trim(kvl);
@@ -190,8 +193,13 @@ namespace dicey {
 		      if (gbio.size() >= 3) gbio = gbio.substr(1, gbio.size()-2);
 		      if (gbio == "protein_coding") pCode = true;
 		    }
+		    if (procod == "gene_name") {
+		      std::string gbio = *kvT2It;
+		      if (gbio.size() >= 3) gbio = gbio.substr(1, gbio.size()-2);
+		      symbol = gbio;
+		    }
 		  }
-		  geneInfo.push_back(GeneInfo(pCode, val));
+		  geneInfo.push_back(GeneInfo(pCode, ensgene, symbol));
 		} else idval = idIter->second;
 		// Convert to 0-based and right-open
 		if (start == 0) {
