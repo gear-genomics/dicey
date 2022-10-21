@@ -17,9 +17,72 @@
 
 namespace dicey {
 
-  template<typename TConfig, typename TGenomicRegions, typename TGeneIds, typename TProteinCoding>
+  struct GeneInfo {
+    bool pcoding;
+    std::string id;
+
+    GeneInfo(bool const p, std::string const& idname) : pcoding(p), id(idname) {}
+  };
+  
+  
+  struct IntervalLabel {
+    int32_t start;
+    int32_t end;
+    char strand;
+    int32_t lid;
+
+    explicit IntervalLabel(int32_t s) : start(s), end(s+1), strand('*'), lid(-1) {}
+    IntervalLabel(int32_t s, int32_t e, char t, int32_t l) : start(s), end(e), strand(t), lid(l) {}
+  };
+
+  struct IntervalLabelId {
+    int32_t start;
+    int32_t end;
+    char strand;
+    int32_t lid;
+    int32_t eid;
+
+    explicit IntervalLabelId(int32_t s) : start(s), end(s+1), strand('*'), lid(-1), eid(-1) {}
+    IntervalLabelId(int32_t s, int32_t e, char t, int32_t l, int32_t i) : start(s), end(e), strand(t), lid(l), eid(i) {}
+  };
+  
+  template<typename TRecord>
+  struct SortIntervalLabel : public std::binary_function<TRecord, TRecord, bool> {
+    inline bool operator()(TRecord const& s1, TRecord const& s2) const {
+      return s1.lid < s2.lid;
+    }
+  };
+  
+  template<typename TRecord>
+  struct SortIntervalStart : public std::binary_function<TRecord, TRecord, bool> {
+    inline bool operator()(TRecord const& s1, TRecord const& s2) const {
+      return s1.start < s2.start;
+    }
+  };
+
+  inline void
+  _insertInterval(std::vector<IntervalLabel>& cr, int32_t s, int32_t e, char strand, int32_t lid, int32_t) {
+    // Uniqueness not necessary because we flatten the interval map
+    cr.push_back(IntervalLabel(s, e, strand, lid));
+  }
+
+  inline void
+  _insertInterval(std::vector<IntervalLabelId>& cr, int32_t s, int32_t e, char strand, int32_t lid, int32_t eid) {
+    // Check uniqueness
+    bool isUnique = true;
+    for(uint32_t i = 0; i < cr.size(); ++i) {
+      if ((cr[i].start == s) && (cr[i].end == e) && (cr[i].strand == strand) && (cr[i].lid == lid)) {
+	isUnique = false;
+	break;
+      }
+    }
+    if (isUnique) cr.push_back(IntervalLabelId(s, e, strand, lid, eid));
+  }
+
+  
+  template<typename TConfig, typename TGenomicRegions, typename TGeneInfo>
   inline int32_t
-  parseGTFAll(TConfig const& c, TGenomicRegions& overlappingRegions, TGeneIds& geneIds, TProteinCoding& pCoding) {
+  parseGTFAll(TConfig const& c, TGenomicRegions& overlappingRegions, TGeneInfo& geneInfo) {
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "GTF feature parsing" << std::endl;
 
@@ -109,11 +172,10 @@ namespace dicey {
 	      if (includeExon) {
 		std::string val = *kvTokensIt;
 		if (val.size() >= 3) val = val.substr(1, val.size()-2); // Trim off the bloody "
-		int32_t idval = geneIds.size();
+		int32_t idval = geneInfo.size();
 		typename TIdMap::const_iterator idIter = idMap.find(val);
 		if (idIter == idMap.end()) {
 		  idMap.insert(std::make_pair(val, idval));
-		  geneIds.push_back(val);
 		  // Protein Coding?
 		  bool pCode = false;
 		  for(Tokenizer::iterator arIter = attrTokens.begin(); arIter != attrTokens.end(); ++arIter) {
@@ -129,7 +191,7 @@ namespace dicey {
 		      if (gbio == "protein_coding") pCode = true;
 		    }
 		  }
-		  pCoding.push_back(pCode);
+		  geneInfo.push_back(GeneInfo(pCode, val));
 		} else idval = idIter->second;
 		// Convert to 0-based and right-open
 		if (start == 0) {
@@ -140,7 +202,6 @@ namespace dicey {
 		  std::cerr << "Feature start is greater than feature end!" << std::endl;
 		  return 0;
 		}
-		//std::cerr << geneIds[idval] << "\t" << start << "\t" << end << std::endl;
 		_insertInterval(overlappingRegions[chrid], start - 1, end, strand, idval, eid++);
 	      }
 	    }
@@ -148,26 +209,19 @@ namespace dicey {
 	}
       }
     }
-    return geneIds.size();
+    return geneInfo.size();
   }
 
 
-  template<typename TConfig, typename TGenomicRegions, typename TGeneIds>
+  template<typename TConfig, typename TGenomicRegions>
   inline int32_t
-  parseGTFAll(TConfig const& c, TGenomicRegions& overlappingRegions, TGeneIds& geneIds) {
-    std::vector<bool> pCoding;
-    return parseGTFAll(c, overlappingRegions, geneIds, pCoding);
-  }
-  
-  template<typename TConfig, typename TGenomicRegions, typename TGeneIds, typename TProteinCoding>
-  inline int32_t
-  parseGTF(TConfig const& c, TGenomicRegions& gRegions, TGeneIds& geneIds, TProteinCoding& pCoding) {
+  parseGTF(TConfig const& c, TGenomicRegions& gRegions, std::vector<GeneInfo>& geneInfo) {
     typedef typename TGenomicRegions::value_type TChromosomeRegions;
 
     // Overlapping intervals for each label
     TGenomicRegions overlappingRegions;
     overlappingRegions.resize(gRegions.size(), TChromosomeRegions());
-    parseGTFAll(c, overlappingRegions, geneIds, pCoding);
+    parseGTFAll(c, overlappingRegions, geneInfo);
     
     // Make intervals non-overlapping for each label
     for(uint32_t refIndex = 0; refIndex < overlappingRegions.size(); ++refIndex) {
@@ -181,7 +235,6 @@ namespace dicey {
       for(uint32_t i = 0; i < overlappingRegions[refIndex].size(); ++i) {
 	if (overlappingRegions[refIndex][i].lid != runningId) {
 	  for(typename TIdIntervals::iterator it = idIntervals.begin(); it != idIntervals.end(); ++it) {
-	    //std::cerr << "merged\t" << geneIds[runningId] << "\t" << it->lower() << "\t" << it->upper() << std::endl;  
 	    gRegions[refIndex].push_back(IntervalLabel(it->lower(), it->upper(), runningStrand, runningId));
 	  }
 	  idIntervals.clear();
@@ -194,15 +247,9 @@ namespace dicey {
       for(typename TIdIntervals::iterator it = idIntervals.begin(); it != idIntervals.end(); ++it) gRegions[refIndex].push_back(IntervalLabel(it->lower(), it->upper(), runningStrand, runningId));
     }
     
-    return geneIds.size();
+    return geneInfo.size();
   }
 
-  template<typename TConfig, typename TGenomicRegions, typename TGeneIds>
-  inline int32_t
-  parseGTF(TConfig const& c, TGenomicRegions& gRegions, TGeneIds& geneIds) {
-    std::vector<bool> pCoding;
-    return parseGTF(c, gRegions, geneIds, pCoding);
-  }
 }
 
 #endif

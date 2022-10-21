@@ -111,16 +111,14 @@ namespace dicey
     typedef std::vector<TChromosomeRegions> TGenomicRegions;
     TGenomicRegions gRegions;
     gRegions.resize(c.nchr.size(), TChromosomeRegions());
-    typedef std::vector<std::string> TGeneIds;
-    TGeneIds geneIds;
-    typedef std::vector<bool> TProteinCoding;
-    TProteinCoding pCoding;
-    parseGTF(c, gRegions, geneIds, pCoding);
+    typedef std::vector<GeneInfo> TGeneInfo;
+    TGeneInfo geneInfo;
+    parseGTF(c, gRegions, geneInfo);
 
     // Load barcodes
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Load barcodes" << std::endl;
     typedef std::vector<std::string> TBarcodes;
-    TBarcodes barcodes(geneIds.size(), "NNNNNNNNNNNNNNNNNNNN");
+    TBarcodes barcodes(geneInfo.size(), "NNNNNNNNNNNNNNNNNNNN");
     uint32_t numBarcodes = 0;
     if (!numBarcodes) {
       faidx_t* fai = fai_load(c.barcodes.string().c_str());
@@ -131,17 +129,14 @@ namespace dicey
 	  std::cerr << "Invalid barcode length! Should be 20bp." << std::endl;
 	  return 1;
 	}
-	while ((numBarcodes < barcodes.size()) && (!c.nonprotein) && (!pCoding[numBarcodes])) ++numBarcodes;
-	while ((numBarcodes < barcodes.size()) && (!c.computeAll) && (c.geneset.find(geneIds[numBarcodes]) == c.geneset.end())) ++numBarcodes;
+	while ((numBarcodes < barcodes.size()) && (!c.nonprotein) && (!geneInfo[numBarcodes].pcoding)) ++numBarcodes;
+	while ((numBarcodes < barcodes.size()) && (!c.computeAll) && (c.geneset.find(geneInfo[numBarcodes].id) == c.geneset.end())) ++numBarcodes;
 	if (numBarcodes < barcodes.size()) barcodes[numBarcodes] = boost::to_upper_copy(std::string(seq));
 	++numBarcodes;
 	free(seq);
       }
       fai_destroy(fai);
     }
-    // Debug
-    //for(uint32_t i = 0; i < pCoding.size(); ++i) std::cerr << geneIds[i] << ',' << pCoding[i] << ',' << barcodes[i] << std::endl;
-    
     // Reference index
     csa_wt<> fm_index;  
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
@@ -166,9 +161,8 @@ namespace dicey
       uint32_t targetlen = 2 * armlen;
       for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
 	for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
-	  //std::cerr << c.chrname[refIndex] << '\t' << gRegions[refIndex][i].start << '\t' << gRegions[refIndex][i].end << '\t' << gRegions[refIndex][i].strand << '\t' << geneIds[gRegions[refIndex][i].lid] << std::endl;
-	  if ((c.computeAll) && (!c.nonprotein) && (!pCoding[gRegions[refIndex][i].lid])) continue;
-	  if ((!c.computeAll) && (c.geneset.find(geneIds[gRegions[refIndex][i].lid]) == c.geneset.end())) continue;
+	  if ((c.computeAll) && (!c.nonprotein) && (!geneInfo[gRegions[refIndex][i].lid].pcoding)) continue;
+	  if ((!c.computeAll) && (c.geneset.find(geneInfo[gRegions[refIndex][i].lid].id) == c.geneset.end())) continue;
 
 	  int32_t seqlen;
 	  char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
@@ -280,7 +274,7 @@ namespace dicey
 	      double barTM = oibartmp.temp;
 	      
 	      // Output
-	      ofile << geneIds[gRegions[refIndex][i].lid] << '\t' << gRegions[refIndex][i].strand << '\t' << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
+	      ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t' << gRegions[refIndex][i].strand << '\t' << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
 	      ofile << arm1 << '-' << arm2 << '\t';
 	      ofile << c.spacerleft << '\t' << c.anchor << '\t' << barcodes[gRegions[refIndex][i].lid] << '\t' << c.spacerright << '\t';
 	      ofile << padlock << '\t';
