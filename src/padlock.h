@@ -1,5 +1,5 @@
-#ifndef DESIGN_H
-#define DESIGN_H
+#ifndef PADLOCK_H
+#define PADLOCK_H
 
 #include <iostream>
 #include <fstream>
@@ -37,7 +37,7 @@ using namespace sdsl;
 namespace dicey
 {
 
-  struct DesignConfig {
+  struct PadlockConfig {
     bool indel;
     bool nonprotein;
     bool computeAll;
@@ -59,8 +59,8 @@ namespace dicey
     boost::filesystem::path infile;
   };
 
-  int design(int argc, char** argv) {
-    DesignConfig c;
+  int padlock(int argc, char** argv) {
+    PadlockConfig c;
     
     // CMD Parameter
     boost::program_options::options_description generic("Generic options");
