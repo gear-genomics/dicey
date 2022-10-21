@@ -49,6 +49,10 @@ namespace dicey
     double dntp;
     std::string idname;
     std::string feature;
+    std::string anchor;
+    std::string spacerleft;
+    std::string spacerright;    
+    std::set<std::string> geneset;
     std::vector<std::string> chrname;
     std::map<std::string, int32_t> nchr;
     boost::filesystem::path gtfFile;
@@ -59,61 +63,15 @@ namespace dicey
     boost::filesystem::path infile;
   };
 
-  int padlock(int argc, char** argv) {
-    PadlockConfig c;
-    
-    // CMD Parameter
-    boost::program_options::options_description generic("Generic options");
-    generic.add_options()
-      ("help,?", "show help message")
-      ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
-      ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
-      ("gtf,t", boost::program_options::value<boost::filesystem::path>(&c.gtfFile), "gtf/gff3 file")
-      ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
-      ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
-      ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
-      ("hamming,n", "use hamming neighborhood instead of edit distance")
-      ("nonprotein,p", "include non-protein coding genes")
-      ;
 
-    boost::program_options::options_description tmcalc("Parameters for Tm Calculation");
-    tmcalc.add_options()
-      ("enttemp", boost::program_options::value<double>(&c.temp)->default_value(37.0), "temperature for entropie and entalpie calculation in Celsius")
-      ("monovalent", boost::program_options::value<double>(&c.mv)->default_value(50.0), "concentration of monovalent ions in mMol")
-      ("divalent", boost::program_options::value<double>(&c.dv)->default_value(1.5), "concentration of divalent ions in mMol")
-      ("dna", boost::program_options::value<double>(&c.dna_conc)->default_value(50.0), "concentration of annealing(!) Oligos in nMol")
-      ("dntp", boost::program_options::value<double>(&c.dntp)->default_value(0.6), "the sum  of all dNTPs in mMol")
-      ;
-    
-    boost::program_options::options_description hidden("Hidden options");
-    hidden.add_options()
-      ("infile", boost::program_options::value<boost::filesystem::path>(&c.infile), "gene.lst")
-      ;
-    
-    boost::program_options::positional_options_description pos_args;
-    pos_args.add("infile", -1);
-    
-    boost::program_options::options_description cmdline_options;
-    cmdline_options.add(generic).add(tmcalc).add(hidden);
-    boost::program_options::options_description visible_options;
-    visible_options.add(generic).add(tmcalc);
-    boost::program_options::variables_map vm;
-    boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(cmdline_options).positional(pos_args).run(), vm);
-    boost::program_options::notify(vm);
+  template<typename TConfig>
+  inline int32_t
+  runPadlock(TConfig& c) {
 
-    // Check command line arguments
-    if ((vm.count("help")) || (!vm.count("infile")) || (!vm.count("genome")) || (!vm.count("barcodes")) || (!vm.count("gtf"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> <gene.list.file>" << std::endl;
-      std::cout << visible_options << "\n";
-      return -1;
-    }
+#ifdef PROFILE
+    ProfilerStart("dicey.prof");
+#endif
 
-    // Cmd switches
-    if (vm.count("hamming")) c.indel = false;
-    else c.indel = true;
-    if (vm.count("nonprotein")) c.nonprotein = true;
-    else c.nonprotein = false;
-    
     // Parameters
     uint32_t maxNeighborHits = 0;
     if (c.indel) maxNeighborHits = 2 * c.distance; // first base deletion and last base deletion give a hit 
@@ -123,43 +81,6 @@ namespace dicey
     double probeTMMax = 75;
     double minGC = 0.4;
     double maxGC = 0.6;
-    std::string anchorseq = "TGCGTCTATTTAGTGGAGCC";
-    std::string spacerleft = "TCCTC";
-    std::string spacerright = "TCTTT";
-    
-    // Check genome
-    if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
-      std::cerr << "Error: Genome does not exist!" << std::endl;
-      return 1;
-    }
-
-    // Check gene list
-    std::set<std::string> geneset;
-    c.computeAll = false;
-    if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
-      if (c.infile.string() == "all") c.computeAll = true;
-      else {
-	std::cerr << "Error: Gene list does not exist!" << std::endl;
-	return 1;
-      }
-    } else {
-      std::ifstream geneFile(c.infile.string().c_str(), std::ifstream::in);
-      if (geneFile.is_open()) {
-        while (geneFile.good()) {
-          std::string gline;
-          getline(geneFile, gline);
-          typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
-          boost::char_separator<char> sep(" \t,;");
-          Tokenizer tokens(gline, sep);
-          Tokenizer::iterator tokIter = tokens.begin();
-          if (tokIter!=tokens.end()) {
-            std::string geneName=*tokIter++;
-	    geneset.insert(geneName);
-	  }
-	}
-	geneFile.close();
-      }
-    }
     
     // Initialize thal arguments
     if ((!boost::filesystem::exists(c.primer3Config)) || (!boost::filesystem::is_directory(c.primer3Config))) {
@@ -188,23 +109,6 @@ namespace dicey
     // Fix provided Temperature
     a.temp += primer3thal::ABSOLUTE_ZERO;
             
-    // Fill genome map
-    if (c.nchr.empty()) {
-      faidx_t* fai = fai_load(c.genome.string().c_str());
-      c.chrname.resize(faidx_nseq(fai));
-      for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
-	std::string chrName = faidx_iseq(fai, refIndex);
-	//std::cerr << chrName << ',' << refIndex << std::endl;
-	c.nchr.insert(std::make_pair(chrName, refIndex));
-	c.chrname[refIndex] = chrName;
-      }
-      fai_destroy(fai);
-    }
-
-    // Filter exon IDs
-    c.idname = "gene_id";
-    c.feature = "exon";
-    
     // Parse exons
     typedef std::vector<IntervalLabel> TChromosomeRegions;
     typedef std::vector<TChromosomeRegions> TGenomicRegions;
@@ -231,7 +135,7 @@ namespace dicey
 	  return 1;
 	}
 	while ((numBarcodes < barcodes.size()) && (!c.nonprotein) && (!pCoding[numBarcodes])) ++numBarcodes;
-	while ((numBarcodes < barcodes.size()) && (!c.computeAll) && (geneset.find(geneIds[numBarcodes]) == geneset.end())) ++numBarcodes;
+	while ((numBarcodes < barcodes.size()) && (!c.computeAll) && (c.geneset.find(geneIds[numBarcodes]) == c.geneset.end())) ++numBarcodes;
 	if (numBarcodes < barcodes.size()) barcodes[numBarcodes] = boost::to_upper_copy(std::string(seq));
 	++numBarcodes;
 	free(seq);
@@ -267,7 +171,7 @@ namespace dicey
 	for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
 	  //std::cerr << c.chrname[refIndex] << '\t' << gRegions[refIndex][i].start << '\t' << gRegions[refIndex][i].end << '\t' << gRegions[refIndex][i].strand << '\t' << geneIds[gRegions[refIndex][i].lid] << std::endl;
 	  if ((c.computeAll) && (!c.nonprotein) && (!pCoding[gRegions[refIndex][i].lid])) continue;
-	  if ((!c.computeAll) && (geneset.find(geneIds[gRegions[refIndex][i].lid]) == geneset.end())) continue;
+	  if ((!c.computeAll) && (c.geneset.find(geneIds[gRegions[refIndex][i].lid]) == c.geneset.end())) continue;
 
 	  int32_t seqlen;
 	  char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
@@ -359,7 +263,7 @@ namespace dicey
 	      if (hits[0] + hits[1] > maxNeighborHits) continue;
 
 	      // Final padlock
-	      std::string padlock = rarm1 + spacerleft + anchorseq + barcodes[gRegions[refIndex][i].lid] + spacerright + rarm2;
+	      std::string padlock = rarm1 + c.spacerleft + c.anchor + barcodes[gRegions[refIndex][i].lid] + c.spacerright + rarm2;
 	      double padlockGC = gccontent(padlock);
 	      if ((padlockGC < minGC) || (padlockGC > maxGC)) continue;
 
@@ -381,7 +285,7 @@ namespace dicey
 	      // Output
 	      ofile << geneIds[gRegions[refIndex][i].lid] << '\t' << gRegions[refIndex][i].strand << '\t' << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
 	      ofile << arm1 << '-' << arm2 << '\t';
-	      ofile << spacerleft << '\t' << anchorseq << '\t' << barcodes[gRegions[refIndex][i].lid] << '\t' << spacerright << '\t';
+	      ofile << c.spacerleft << '\t' << c.anchor << '\t' << barcodes[gRegions[refIndex][i].lid] << '\t' << c.spacerright << '\t';
 	      ofile << padlock << '\t';
 	      ofile << arm1TM << '\t' << arm2TM << '\t' << barTM << '\t' << probeTM << '\t';
 	      ofile << arm1GC << '\t' << arm2GC << '\t' << barGC << '\t' << probeGC << std::endl;
@@ -397,9 +301,141 @@ namespace dicey
     // Clean-up
     primer3thal::destroy_thal_structures();
     
+
+#ifdef PROFILE
+    ProfilerStop();
+#endif
+
+    // End
+    std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] Done." << std::endl;
     return 0;
   }
+  
 
+  int padlock(int argc, char** argv) {
+    PadlockConfig c;
+    
+    // CMD Parameter
+    boost::program_options::options_description generic("Generic options");
+    generic.add_options()
+      ("help,?", "show help message")
+      ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
+      ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
+      ("gtf,t", boost::program_options::value<boost::filesystem::path>(&c.gtfFile), "gtf/gff3 file")
+      ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
+      ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
+      ("hamming,n", "use hamming neighborhood instead of edit distance")
+      ("nonprotein,p", "include non-protein coding genes")
+      ;
+
+
+    boost::program_options::options_description padopt("Padlock options");
+    padopt.add_options()
+      ("anchor,a", boost::program_options::value<std::string>(&c.anchor)->default_value("TGCGTCTATTTAGTGGAGCC"), "anchor sequence")
+      ("spacerleft,l", boost::program_options::value<std::string>(&c.spacerleft)->default_value("TCCTC"), "spacer left")
+      ("spacerright,r", boost::program_options::value<std::string>(&c.spacerright)->default_value("TCTTT"), "spacer right")
+      ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
+      ;
+
+    
+    boost::program_options::options_description tmcalc("Parameters for Tm Calculation");
+    tmcalc.add_options()
+      ("enttemp", boost::program_options::value<double>(&c.temp)->default_value(37.0), "temperature for entropie and entalpie calculation in Celsius")
+      ("monovalent", boost::program_options::value<double>(&c.mv)->default_value(50.0), "concentration of monovalent ions in mMol")
+      ("divalent", boost::program_options::value<double>(&c.dv)->default_value(1.5), "concentration of divalent ions in mMol")
+      ("dna", boost::program_options::value<double>(&c.dna_conc)->default_value(50.0), "concentration of annealing(!) Oligos in nMol")
+      ("dntp", boost::program_options::value<double>(&c.dntp)->default_value(0.6), "the sum  of all dNTPs in mMol")
+      ;
+    
+    boost::program_options::options_description hidden("Hidden options");
+    hidden.add_options()
+      ("infile", boost::program_options::value<boost::filesystem::path>(&c.infile), "gene.lst")
+      ;
+    
+    boost::program_options::positional_options_description pos_args;
+    pos_args.add("infile", -1);
+    
+    boost::program_options::options_description cmdline_options;
+    cmdline_options.add(generic).add(padopt).add(tmcalc).add(hidden);
+    boost::program_options::options_description visible_options;
+    visible_options.add(generic).add(padopt).add(tmcalc);
+    boost::program_options::variables_map vm;
+    boost::program_options::store(boost::program_options::command_line_parser(argc, argv).options(cmdline_options).positional(pos_args).run(), vm);
+    boost::program_options::notify(vm);
+
+    // Check command line arguments
+    if ((vm.count("help")) || (!vm.count("infile")) || (!vm.count("genome")) || (!vm.count("barcodes")) || (!vm.count("gtf"))) {
+      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> <gene.list.file>" << std::endl;
+      std::cout << visible_options << "\n";
+      return -1;
+    }
+
+    // Cmd switches
+    if (vm.count("hamming")) c.indel = false;
+    else c.indel = true;
+    if (vm.count("nonprotein")) c.nonprotein = true;
+    else c.nonprotein = false;
+
+    // Check genome
+    if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
+      std::cerr << "Error: Genome does not exist!" << std::endl;
+      return 1;
+    }
+
+    // Fill genome map
+    if (c.nchr.empty()) {
+      faidx_t* fai = fai_load(c.genome.string().c_str());
+      c.chrname.resize(faidx_nseq(fai));
+      for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
+	std::string chrName = faidx_iseq(fai, refIndex);
+	//std::cerr << chrName << ',' << refIndex << std::endl;
+	c.nchr.insert(std::make_pair(chrName, refIndex));
+	c.chrname[refIndex] = chrName;
+      }
+      fai_destroy(fai);
+    }
+
+    // Filter exon IDs
+    c.idname = "gene_id";
+    c.feature = "exon";
+    
+    // Check gene list
+    c.computeAll = false;
+    if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
+      if (c.infile.string() == "all") c.computeAll = true;
+      else {
+	std::cerr << "Error: Gene list does not exist!" << std::endl;
+	return 1;
+      }
+    } else {
+      std::ifstream geneFile(c.infile.string().c_str(), std::ifstream::in);
+      if (geneFile.is_open()) {
+        while (geneFile.good()) {
+          std::string gline;
+          getline(geneFile, gline);
+          typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
+          boost::char_separator<char> sep(" \t,;");
+          Tokenizer tokens(gline, sep);
+          Tokenizer::iterator tokIter = tokens.begin();
+          if (tokIter!=tokens.end()) {
+            std::string geneName=*tokIter++;
+	    c.geneset.insert(geneName);
+	  }
+	}
+	geneFile.close();
+      }
+    }
+    
+    // Show cmd
+    boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+    std::cout << '[' << boost::posix_time::to_simple_string(now) << "] ";
+    std::cout << "dicey ";
+    for(int i=0; i<argc; ++i) { std::cout << argv[i] << ' '; }
+    std::cout << std::endl;
+
+    return runPadlock(c);
+  }
+    
 }
 
 #endif
