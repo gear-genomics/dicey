@@ -38,6 +38,7 @@ namespace dicey
 
   struct PadlockConfig {
     bool indel;
+    bool overlapping;
     bool computeAll;
     uint32_t distance;
     uint32_t armlen;
@@ -280,6 +281,9 @@ namespace dicey
 	    ofile << padlock << '\t';
 	    ofile << arm1TM << '\t' << arm2TM << '\t' << barTM << '\t' << probeTM << '\t';
 	    ofile << arm1GC << '\t' << arm2GC << '\t' << barGC << '\t' << probeGC << std::endl;
+
+	    // Increase k for non-overlapping probes
+	    if (!c.overlapping) k += targetlen - 1;
 	  }
 	}
 	free(seq);
@@ -314,6 +318,7 @@ namespace dicey
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
+      ("overlapping,v", "allow overlapping probes")
       ;
 
 
@@ -363,6 +368,8 @@ namespace dicey
     // Cmd switches
     if (vm.count("hamming")) c.indel = false;
     else c.indel = true;
+    if (vm.count("overlapping")) c.overlapping = true;
+    else c.overlapping = false;
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
