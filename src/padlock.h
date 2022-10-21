@@ -41,6 +41,7 @@ namespace dicey
     bool nonprotein;
     bool computeAll;
     uint32_t distance;
+    uint32_t armlen;
     double temp;
     double mv;
     double dv;
@@ -154,138 +155,136 @@ namespace dicey
     ofile << "Gene\tSymbol\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
     faidx_t* fai = fai_load(c.genome.string().c_str());
-    for(uint32_t armlen = 20; armlen < 21; ++armlen) {
-      uint32_t targetlen = 2 * armlen;
-      for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
-	for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
-	  if ((c.computeAll) && (!c.nonprotein) && (!geneInfo[gRegions[refIndex][i].lid].pcoding)) continue;
-	  if ((!c.computeAll) && (c.geneset.find(geneInfo[gRegions[refIndex][i].lid].id) == c.geneset.end())) continue;
+    uint32_t targetlen = 2 * c.armlen;
+    for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
+      for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
+	if ((c.computeAll) && (!c.nonprotein) && (!geneInfo[gRegions[refIndex][i].lid].pcoding)) continue;
+	if ((!c.computeAll) && (c.geneset.find(geneInfo[gRegions[refIndex][i].lid].id) == c.geneset.end())) continue;
 
-	  int32_t seqlen;
-	  char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
-	  std::string exonseq = boost::to_upper_copy(std::string(seq));
-	  if (gRegions[refIndex][i].strand == '-') revcomplement(exonseq);
-	  uint32_t exonlen = exonseq.size();
-	  if (exonlen >= targetlen) {
-	    std::string rexonseq(exonseq);
-	    revcomplement(rexonseq);
-	    for(uint32_t k = 0; k < (exonlen - targetlen + 1); ++k) {
-	      // Arm1
-	      std::string arm1 = exonseq.substr(k, armlen);
-	      double arm1GC = gccontent(arm1);
-	      if ((arm1GC < minGC) || (arm1GC > maxGC)) continue;
-	      std::string rarm1 = rexonseq.substr(exonlen - armlen - k, armlen);
-	      primer3thal::oligo1 = (unsigned char*) arm1.c_str();
-	      primer3thal::oligo2 = (unsigned char*) rarm1.c_str();
-	      primer3thal::thal_results oiarm1;
-	      bool thalsuccess1 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiarm1);
-	      if ((!thalsuccess1) || (oiarm1.temp == primer3thal::THAL_ERROR_SCORE)) {
-		std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
-		return 1;
-	      }
-	      double arm1TM = oiarm1.temp;
-	      if (arm1TM > armTMMax) continue;
-	      
-	      // Arm2
-	      std::string arm2 = exonseq.substr(k + armlen, armlen);
-	      double arm2GC = gccontent(arm2);
-	      if ((arm2GC < minGC) || (arm2GC > maxGC)) continue;
-	      std::string rarm2 = rexonseq.substr(exonlen - armlen - (k + armlen), armlen);
-	      primer3thal::oligo1 = (unsigned char*) arm2.c_str();
-	      primer3thal::oligo2 = (unsigned char*) rarm2.c_str();
-	      primer3thal::thal_results oiarm2;
-	      bool thalsuccess2 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiarm2);
-	      if ((!thalsuccess2) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
-		std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
-		return 1;
-	      }
-	      double arm2TM = oiarm2.temp;
-	      if ((arm2TM > armTMMax) || (std::abs(arm1TM - arm2TM) > armTMDiff)) continue;
-	      
-	      // Probe
-	      std::string probe = exonseq.substr(k, targetlen);
-	      double probeGC = gccontent(probe);
-	      if ((probeGC < minGC) || (probeGC > maxGC)) continue;
-	      std::string rprobe = rexonseq.substr(exonlen - targetlen - k, targetlen);
-	      primer3thal::oligo1 = (unsigned char*) probe.c_str();
-	      primer3thal::oligo2 = (unsigned char*) rprobe.c_str();
-	      primer3thal::thal_results oiprobe;
-	      bool thalsuccess3 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiprobe);
-	      if ((!thalsuccess3) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
-		std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
-		return 1;
-	      }
-	      double probeTM = oiprobe.temp;
-	      if ((probeTM < probeTMMin) || (probeTM > probeTMMax)) continue;
-	      
-	      // Search neighbors of arm1
-	      typedef std::set<std::string> TStringSet;
-	      typedef std::vector<TStringSet> TFwdRevSearchSets;
-	      TFwdRevSearchSets fwrv(2, TStringSet());
-	      neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
-	      neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
-	      std::vector<uint32_t> hits(2, 0);
-	      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
-		for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
-		  std::string query = *it;
-		  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
-		  hits[fwrvidx] += occs;
-		}
-	      }
-	      if (hits[0] + hits[1] > maxNeighborHits) continue;
-	      
-	      // Search neighbors of arm2
-	      fwrv.clear();
-	      fwrv.resize(2, TStringSet());
-	      neighbors(arm2, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
-	      neighbors(rarm2, alphabet, c.distance, c.indel, 10000, fwrv[1]);
-	      hits.clear();
-	      hits.resize(2, 0);
-	      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
-		for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
-		  std::string query = *it;
-		  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
-		  hits[fwrvidx] += occs;
-		}
-	      }
-	      if (hits[0] + hits[1] > maxNeighborHits) continue;
-
-	      // Final padlock
-	      std::string padlock = rarm1 + c.spacerleft + c.anchor + geneInfo[gRegions[refIndex][i].lid].barcode + c.spacerright + rarm2;
-	      double padlockGC = gccontent(padlock);
-	      if ((padlockGC < minGC) || (padlockGC > maxGC)) continue;
-
-	      // Barcode
-	      std::string bartmp = geneInfo[gRegions[refIndex][i].lid].barcode;
-	      double barGC = gccontent(bartmp);
-	      std::string rbartmp(bartmp);
-	      revcomplement(rbartmp);
-	      primer3thal::oligo1 = (unsigned char*) bartmp.c_str();
-	      primer3thal::oligo2 = (unsigned char*) rbartmp.c_str();
-	      primer3thal::thal_results oibartmp;
-	      bool thalsuccess5 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oibartmp);
-	      if ((!thalsuccess5) || (oibartmp.temp == primer3thal::THAL_ERROR_SCORE)) {
-		std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
-		return 1;
-	      }
-	      double barTM = oibartmp.temp;
-	      
-	      // Output
-	      ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
-	      ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
-	      ofile << gRegions[refIndex][i].strand << '\t';
-	      ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
-	      ofile << arm1 << '-' << arm2 << '\t';
-	      ofile << c.spacerleft << '\t' << c.anchor << '\t';
-	      ofile << geneInfo[gRegions[refIndex][i].lid].barcode << '\t';
-	      ofile << c.spacerright << '\t';
-	      ofile << padlock << '\t';
-	      ofile << arm1TM << '\t' << arm2TM << '\t' << barTM << '\t' << probeTM << '\t';
-	      ofile << arm1GC << '\t' << arm2GC << '\t' << barGC << '\t' << probeGC << std::endl;
+	int32_t seqlen;
+	char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
+	std::string exonseq = boost::to_upper_copy(std::string(seq));
+	if (gRegions[refIndex][i].strand == '-') revcomplement(exonseq);
+	uint32_t exonlen = exonseq.size();
+	if (exonlen >= targetlen) {
+	  std::string rexonseq(exonseq);
+	  revcomplement(rexonseq);
+	  for(uint32_t k = 0; k < (exonlen - targetlen + 1); ++k) {
+	    // Arm1
+	    std::string arm1 = exonseq.substr(k, c.armlen);
+	    double arm1GC = gccontent(arm1);
+	    if ((arm1GC < minGC) || (arm1GC > maxGC)) continue;
+	    std::string rarm1 = rexonseq.substr(exonlen - c.armlen - k, c.armlen);
+	    primer3thal::oligo1 = (unsigned char*) arm1.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rarm1.c_str();
+	    primer3thal::thal_results oiarm1;
+	    bool thalsuccess1 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiarm1);
+	    if ((!thalsuccess1) || (oiarm1.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
 	    }
+	    double arm1TM = oiarm1.temp;
+	    if (arm1TM > armTMMax) continue;
+	    
+	    // Arm2
+	    std::string arm2 = exonseq.substr(k + c.armlen, c.armlen);
+	    double arm2GC = gccontent(arm2);
+	    if ((arm2GC < minGC) || (arm2GC > maxGC)) continue;
+	    std::string rarm2 = rexonseq.substr(exonlen - c.armlen - (k + c.armlen), c.armlen);
+	    primer3thal::oligo1 = (unsigned char*) arm2.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rarm2.c_str();
+	    primer3thal::thal_results oiarm2;
+	    bool thalsuccess2 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiarm2);
+	    if ((!thalsuccess2) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
+	    }
+	    double arm2TM = oiarm2.temp;
+	    if ((arm2TM > armTMMax) || (std::abs(arm1TM - arm2TM) > armTMDiff)) continue;
+	    
+	    // Probe
+	    std::string probe = exonseq.substr(k, targetlen);
+	    double probeGC = gccontent(probe);
+	    if ((probeGC < minGC) || (probeGC > maxGC)) continue;
+	    std::string rprobe = rexonseq.substr(exonlen - targetlen - k, targetlen);
+	    primer3thal::oligo1 = (unsigned char*) probe.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rprobe.c_str();
+	    primer3thal::thal_results oiprobe;
+	    bool thalsuccess3 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiprobe);
+	    if ((!thalsuccess3) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
+	    }
+	    double probeTM = oiprobe.temp;
+	    if ((probeTM < probeTMMin) || (probeTM > probeTMMax)) continue;
+	    
+	    // Search neighbors of arm1
+	    typedef std::set<std::string> TStringSet;
+	    typedef std::vector<TStringSet> TFwdRevSearchSets;
+	    TFwdRevSearchSets fwrv(2, TStringSet());
+	    neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
+	    neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
+	    std::vector<uint32_t> hits(2, 0);
+	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+	      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
+		std::string query = *it;
+		std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+		hits[fwrvidx] += occs;
+	      }
+	    }
+	    if (hits[0] + hits[1] > maxNeighborHits) continue;
+	    
+	    // Search neighbors of arm2
+	    fwrv.clear();
+	    fwrv.resize(2, TStringSet());
+	    neighbors(arm2, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
+	    neighbors(rarm2, alphabet, c.distance, c.indel, 10000, fwrv[1]);
+	    hits.clear();
+	    hits.resize(2, 0);
+	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+	      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
+		std::string query = *it;
+		std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+		hits[fwrvidx] += occs;
+	      }
+	    }
+	    if (hits[0] + hits[1] > maxNeighborHits) continue;
+	    
+	    // Final padlock
+	    std::string padlock = rarm1 + c.spacerleft + c.anchor + geneInfo[gRegions[refIndex][i].lid].barcode + c.spacerright + rarm2;
+	    double padlockGC = gccontent(padlock);
+	    if ((padlockGC < minGC) || (padlockGC > maxGC)) continue;
+	    
+	    // Barcode
+	    std::string bartmp = geneInfo[gRegions[refIndex][i].lid].barcode;
+	    double barGC = gccontent(bartmp);
+	    std::string rbartmp(bartmp);
+	    revcomplement(rbartmp);
+	    primer3thal::oligo1 = (unsigned char*) bartmp.c_str();
+	    primer3thal::oligo2 = (unsigned char*) rbartmp.c_str();
+	    primer3thal::thal_results oibartmp;
+	    bool thalsuccess5 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oibartmp);
+	    if ((!thalsuccess5) || (oibartmp.temp == primer3thal::THAL_ERROR_SCORE)) {
+	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
+	      return 1;
+	    }
+	    double barTM = oibartmp.temp;
+	      
+	    // Output
+	    ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
+	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
+	    ofile << gRegions[refIndex][i].strand << '\t';
+	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
+	    ofile << arm1 << '-' << arm2 << '\t';
+	    ofile << c.spacerleft << '\t' << c.anchor << '\t';
+	    ofile << geneInfo[gRegions[refIndex][i].lid].barcode << '\t';
+	    ofile << c.spacerright << '\t';
+	    ofile << padlock << '\t';
+	    ofile << arm1TM << '\t' << arm2TM << '\t' << barTM << '\t' << probeTM << '\t';
+	    ofile << arm1GC << '\t' << arm2GC << '\t' << barGC << '\t' << probeGC << std::endl;
 	  }
-	  free(seq);
 	}
+	free(seq);
       }
     }
     fai_destroy(fai);
@@ -313,7 +312,6 @@ namespace dicey
     generic.add_options()
       ("help,?", "show help message")
       ("genome,g", boost::program_options::value<boost::filesystem::path>(&c.genome), "genome file")
-      ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("gtf,t", boost::program_options::value<boost::filesystem::path>(&c.gtfFile), "gtf/gff3 file")
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
@@ -328,6 +326,8 @@ namespace dicey
       ("spacerleft,l", boost::program_options::value<std::string>(&c.spacerleft)->default_value("TCCTC"), "spacer left")
       ("spacerright,r", boost::program_options::value<std::string>(&c.spacerright)->default_value("TCTTT"), "spacer right")
       ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
+      ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
+      ("armlen,m", boost::program_options::value<uint32_t>(&c.armlen)->default_value(20), "probe arm length")
       ;
 
     
