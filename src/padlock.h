@@ -38,7 +38,6 @@ namespace dicey
 
   struct PadlockConfig {
     bool indel;
-    bool nonprotein;
     bool computeAll;
     uint32_t distance;
     uint32_t armlen;
@@ -152,15 +151,12 @@ namespace dicey
     // Outfile
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Compute padlocks" << std::endl;
     std::ofstream ofile(c.outfile.string().c_str());
-    ofile << "Gene\tSymbol\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
+    ofile << "Gene\tSymbol\tPosition\tTranscripts\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
     faidx_t* fai = fai_load(c.genome.string().c_str());
     uint32_t targetlen = 2 * c.armlen;
     for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
       for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
-	if ((c.computeAll) && (!c.nonprotein) && (!geneInfo[gRegions[refIndex][i].lid].pcoding)) continue;
-	if ((!c.computeAll) && (c.geneset.find(geneInfo[gRegions[refIndex][i].lid].id) == c.geneset.end())) continue;
-
 	int32_t seqlen;
 	char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
 	std::string exonseq = boost::to_upper_copy(std::string(seq));
@@ -273,6 +269,8 @@ namespace dicey
 	    // Output
 	    ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
+	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + k << '\t';
+	    ofile << "https://rest.ensembl.org/vep/human/hgvs/" << c.chrname[refIndex] << ":g." << gRegions[refIndex][i].start + k << seq[k] << ">N\t";
 	    ofile << gRegions[refIndex][i].strand << '\t';
 	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';
@@ -316,7 +314,6 @@ namespace dicey
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
-      ("nonprotein,p", "include non-protein coding genes")
       ;
 
 
@@ -366,8 +363,6 @@ namespace dicey
     // Cmd switches
     if (vm.count("hamming")) c.indel = false;
     else c.indel = true;
-    if (vm.count("nonprotein")) c.nonprotein = true;
-    else c.nonprotein = false;
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {

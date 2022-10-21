@@ -154,21 +154,18 @@ namespace dicey {
 	    std::string key = *kvTokensIt++;
 	    if (key == "gene_id") {     // Select gene_id
 	      // Protein-coding exon?
-	      bool includeExon = true; 
-	      if (!c.nonprotein) {
-		includeExon = false;
-		for(Tokenizer::iterator arIter = attrTokens.begin(); arIter != attrTokens.end(); ++arIter) {
-		  std::string kvl = *arIter;
-		  boost::trim(kvl);
-		  boost::char_separator<char> sKV2(" ");
-		  Tokenizer kvT2(kvl, sKV2);
-		  Tokenizer::iterator kvT2It = kvT2.begin();
-		  std::string procod = *kvT2It++;
-		  if (procod == "transcript_biotype") {
-		    std::string gbio = *kvT2It;
-		    if (gbio.size() >= 3) gbio = gbio.substr(1, gbio.size()-2);
-		    if (gbio == "protein_coding") includeExon = true;
-		  }
+	      bool includeExon = false;
+	      for(Tokenizer::iterator arIter = attrTokens.begin(); arIter != attrTokens.end(); ++arIter) {
+		std::string kvl = *arIter;
+		boost::trim(kvl);
+		boost::char_separator<char> sKV2(" ");
+		Tokenizer kvT2(kvl, sKV2);
+		Tokenizer::iterator kvT2It = kvT2.begin();
+		std::string procod = *kvT2It++;
+		if (procod == "transcript_biotype") {
+		  std::string gbio = *kvT2It;
+		  if (gbio.size() >= 3) gbio = gbio.substr(1, gbio.size()-2);
+		  if (gbio == "protein_coding") includeExon = true;
 		}
 	      }
 	      std::string ensgene = *kvTokensIt;
