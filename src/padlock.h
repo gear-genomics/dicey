@@ -269,10 +269,10 @@ namespace dicey
 	    // Output
 	    ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
-	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + k << '\t';
-	    ofile << "https://rest.ensembl.org/vep/human/hgvs/" << c.chrname[refIndex] << ":g." << gRegions[refIndex][i].start + k << seq[k] << ">N\t";
+	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + k + 1 << '\t';
+	    ofile << "https://rest.ensembl.org/vep/human/hgvs/" << c.chrname[refIndex] << ":g." << gRegions[refIndex][i].start + k + 1 << seq[k] << ">N\t";
 	    ofile << gRegions[refIndex][i].strand << '\t';
-	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start << '-' << gRegions[refIndex][i].end << '\t';
+	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';
 	    ofile << c.spacerleft << '\t' << c.anchor << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].barcode << '\t';
