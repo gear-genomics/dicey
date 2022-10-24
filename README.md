@@ -84,7 +84,7 @@ BMC Genomics 21, 230 (2020).
 
 ## License
 
-Dicey is distributed under the BSD 3-Clause license. Consult the accompanying [LICENSE](https://github.com/gear-genomics/dicey/blob/master/LICENSE) file for more details.
+Dicey is distributed under the GPL license. Consult the accompanying [LICENSE](https://github.com/gear-genomics/dicey/blob/master/LICENSE) file for more details.
 
 
 ## Questions
