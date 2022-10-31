@@ -222,13 +222,16 @@ namespace dicey
 	    neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
 	    neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
 	    std::vector<uint32_t> hits(2, 0);
+	    //std::cerr << gRegions[refIndex][i].strand << ',' << arm1 << ',' << rarm1 << std::endl;
 	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
 	      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
 		std::string query = *it;
 		std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+		//if (occs > 0) std::cerr << *it << ',' << occs << std::endl;
 		hits[fwrvidx] += occs;
 	      }
 	    }
+	    //std::cerr << hits[0] << ',' << hits[1] << ',' << maxNeighborHits << std::endl;
 	    if (hits[0] + hits[1] > maxNeighborHits) continue;
 	    
 	    // Search neighbors of arm2

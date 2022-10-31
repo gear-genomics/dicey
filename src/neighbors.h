@@ -44,19 +44,19 @@ _insert(TStrSet& strset, std::string const& s) {
 
 template<typename TAlphabet, typename TStringSet>
 inline void
-_neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bool indel, int32_t pos, uint32_t maxsize, TStringSet& strset) {
+_neighbors(std::string const& query, TAlphabet const& alphabet, int32_t const inputdist, int32_t dist, bool indel, int32_t pos, uint32_t maxsize, TStringSet& strset) {
   if (strset.size() < maxsize) {
     if (pos < (int32_t) query.size()) {
       if (dist > 0) {
 	if (indel) {
 	  // Deletion
 	  std::string newst = query.substr(0, pos) + query.substr(pos + 1);
-	  _neighbors(newst, alphabet, dist - 1, indel, pos, maxsize, strset);
+	  _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos, maxsize, strset);
 	}
       }
       
       // No change, move to next pos
-      _neighbors(query, alphabet, dist, indel, pos+1, maxsize, strset);
+      _neighbors(query, alphabet, inputdist, dist, indel, pos+1, maxsize, strset);
       
       if (dist > 0) {
 	// Switch nucleotide
@@ -64,7 +64,7 @@ _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bo
 	  if (*ait != query[pos]) {
 	    std::string newst(query);
 	    newst[pos] = *ait;
-	    _neighbors(newst, alphabet, dist - 1, indel, pos+1, maxsize, strset);
+	    _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos+1, maxsize, strset);
 	  }
 	}
 	
@@ -74,12 +74,13 @@ _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bo
 	    std::string ins("N");
 	    ins[0] = *ait;
 	    std::string newst = query.substr(0, pos) + ins + query.substr(pos);
-	    _neighbors(newst, alphabet, dist - 1, indel, pos + 1, maxsize, strset);
+	    _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos + 1, maxsize, strset);
 	  }
 	}
       }
     } else {
-      _insert(strset, query);
+      // Only insert true neighbors
+      if (dist < inputdist) _insert(strset, query);
     }
   }
 }
@@ -88,7 +89,7 @@ _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bo
 template<typename TAlphabet, typename TStringSet>
 inline void
 neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bool indel, uint32_t maxsize, TStringSet& strset) {
-  _neighbors(query, alphabet, dist, indel, 0, maxsize, strset);
+  _neighbors(query, alphabet, dist, dist, indel, 0, maxsize, strset);
 }
 
 
