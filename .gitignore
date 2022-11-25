@@ -1,6 +1,7 @@
 .sdsl
 .htslib
 bin/
+data/
 src/dicey
 src/sdslLite/
 *~

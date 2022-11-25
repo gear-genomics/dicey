@@ -58,6 +58,21 @@ The default output is a JSON file that can also be stored in a file.
 `dicey search -c 45 -o out.json.gz -g hg19.fa.gz primers.fa`
 
 
+## Padlock probe design
+
+Dicey can design padlock probes for imaging mRNA in single cells. You need to download an indexed reference genome and a matching GTF file.
+
+`wget -r --no-parent -A 'Homo_sapiens.GRCh38*' https://gear.embl.de/data/tracy/`
+
+`mv gear.embl.de/data/tracy/Homo_sapiens.GRCh38* .`
+
+`wget http://ftp.ensembl.org/pub/release-107/gtf/homo_sapiens/Homo_sapiens.GRCh38.107.gtf.gz`
+
+With these files, you can then design padlock probes for a given gene using
+
+`dicey padlock -g Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz -t Homo_sapiens.GRCh38.107.gtf.gz -b data/bar.fa.gz ENSG00000136997`
+
+
 ## Graphical user interface
 
 You can search primers interactively using our web application [silica](https://www.gear-genomics.com/silica/).
