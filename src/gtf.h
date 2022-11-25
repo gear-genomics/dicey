@@ -22,8 +22,9 @@ namespace dicey {
     std::string id;
     std::string symbol;
     std::string barcode;
+    std::string code;
     
-    GeneInfo(bool const p, std::string const& idname, std::string const& sym) : pcoding(p), id(idname), symbol(sym), barcode("NNNNNNNNNNNNNNNNNNNN") {}
+    GeneInfo(bool const p, std::string const& idname, std::string const& sym) : pcoding(p), id(idname), symbol(sym), barcode("NNNNNNNNNNNNNNNNNNNN"), code("000000") {}
   };
   
   
@@ -207,7 +208,7 @@ namespace dicey {
 		  std::cerr << "Feature start is greater than feature end!" << std::endl;
 		  return 0;
 		}
-		_insertInterval(overlappingRegions[chrid], start - 1, end, strand, idval, eid++);
+		_insertInterval(overlappingRegions[chrid], start - 1, end - 1, strand, idval, eid++);
 	      }
 	    }
 	  }

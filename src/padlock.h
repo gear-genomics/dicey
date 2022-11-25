@@ -180,7 +180,10 @@ namespace dicey
 	  std::cerr << "Invalid barcode length! Should be 20bp." << std::endl;
 	  return 1;
 	}
-	if (numBarcodes < geneInfo.size()) geneInfo[numBarcodes].barcode = boost::to_upper_copy(std::string(seq));
+	if (numBarcodes < geneInfo.size()) {
+	  geneInfo[numBarcodes].barcode = boost::to_upper_copy(std::string(seq));
+	  geneInfo[numBarcodes].code = std::string(faidx_iseq(fai, refIndex));
+	}
 	++numBarcodes;
 	free(seq);
       }
@@ -204,7 +207,7 @@ namespace dicey
     // Outfile
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Compute padlocks" << std::endl;
     std::ofstream ofile(c.outfile.string().c_str());
-    ofile << "Gene\tSymbol\tPosition\tTranscripts\tUCSC\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
+    ofile << "Gene\tSymbol\tCode\tPosition\tUCSC\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
     faidx_t* fai = fai_load(c.genome.string().c_str());
     uint32_t targetlen = 2 * c.armlen;
@@ -323,13 +326,15 @@ namespace dicey
 	    double barTM = oibartmp.temp;
 	      
 	    // Output
+	    int32_t startpos = gRegions[refIndex][i].start + k + 1;
+	    if (gRegions[refIndex][i].strand == '-') startpos = gRegions[refIndex][i].end - k - targetlen + 2;
 	    ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
-	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + k + 1 << '\t';
-	    ofile << "https://rest.ensembl.org/vep/human/hgvs/" << c.chrname[refIndex] << ":g." << gRegions[refIndex][i].start + k + 1 << seq[k] << ">N\t";
-	    ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" << c.chrname[refIndex] << ":" << gRegions[refIndex][i].start + k + 1 << "-" << gRegions[refIndex][i].start + k + targetlen << '\t'; 
+	    ofile << geneInfo[gRegions[refIndex][i].lid].code << '\t';	    
+	    ofile << c.chrname[refIndex] << ':' << startpos << '\t';
+	    ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << '\t'; 
 	    ofile << gRegions[refIndex][i].strand << '\t';
-	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end << '\t';
+	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';
 	    ofile << c.spacerleft << '\t' << c.anchor << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].barcode << '\t';
@@ -450,10 +455,7 @@ namespace dicey
     c.computeAll = false;
     if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
       if (c.infile.string() == "all") c.computeAll = true;
-      else {
-	std::cerr << "Error: Gene list does not exist!" << std::endl;
-	return 1;
-      }
+      else c.geneset.insert(c.infile.string());
     } else {
       std::ifstream geneFile(c.infile.string().c_str(), std::ifstream::in);
       if (geneFile.is_open()) {
