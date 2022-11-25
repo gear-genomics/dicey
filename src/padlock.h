@@ -20,6 +20,8 @@
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int_distribution.hpp>
 
 #include <sdsl/suffix_arrays.hpp>
 #include <htslib/faidx.h>
@@ -62,10 +64,60 @@ namespace dicey
   };
 
 
+  inline void
+  _outputGeneCodes() {
+    // Generate all possible codes
+    std::vector<std::string> geneCodes;
+    std::vector<char> genealph;
+    for(uint32_t i = 1; i < 5; ++i) genealph.push_back(boost::lexical_cast<char>(i));
+    generateGeneCode(genealph, "", 6, geneCodes);
+
+    // Pick at random
+    boost::random::mt19937 gen;
+    boost::random::uniform_int_distribution<> dist(0, geneCodes.size() - 1);
+    boost::random::uniform_int_distribution<> deplete(0, 100);
+    uint32_t maxCodes = 500;
+    uint32_t minham = 2;
+    std::vector<std::string> selected;
+    uint32_t iterations = 0;
+    while (selected.size() < maxCodes) {
+      ++iterations;
+      if (iterations % 10000000 == 0) std::cerr << "Iteration: " << iterations << std::endl;
+      int32_t idx = dist(gen);
+      std::set<char> diversity;
+      int32_t onecount = 0;
+      for(uint32_t k = 0; k < geneCodes[idx].size(); ++k) {
+	diversity.insert(geneCodes[idx][k]);
+	if (geneCodes[idx][k] == '1') ++onecount;
+      }
+      // Check diversity
+      if (diversity.size() < 3) continue;
+      // Deplete 1
+      if (deplete(gen) > 100 - onecount * 49) continue;
+      // Check hamming
+      bool validham = true;
+      for(uint32_t i = 0; i < selected.size(); ++i) {
+	uint32_t ham = 0;
+	for(uint32_t k = 0; k < geneCodes[idx].size(); ++k) {
+	  if (geneCodes[idx][k] != selected[i][k]) ++ham;
+	}
+	if (ham < minham) {
+	  validham = false;
+	  break;
+	}
+      }
+      if (validham) selected.push_back(geneCodes[idx]);
+    }
+
+    for(uint32_t i = 0; i < selected.size(); ++i) {
+      std::cout << selected[i] << std::endl;
+    }
+  }
+      
+
   template<typename TConfig>
   inline int32_t
   runPadlock(TConfig& c) {
-
 #ifdef PROFILE
     ProfilerStart("dicey.prof");
 #endif
@@ -152,7 +204,7 @@ namespace dicey
     // Outfile
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Compute padlocks" << std::endl;
     std::ofstream ofile(c.outfile.string().c_str());
-    ofile << "Gene\tSymbol\tPosition\tTranscripts\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
+    ofile << "Gene\tSymbol\tPosition\tTranscripts\tUCSC\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
     faidx_t* fai = fai_load(c.genome.string().c_str());
     uint32_t targetlen = 2 * c.armlen;
@@ -275,6 +327,7 @@ namespace dicey
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
 	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + k + 1 << '\t';
 	    ofile << "https://rest.ensembl.org/vep/human/hgvs/" << c.chrname[refIndex] << ":g." << gRegions[refIndex][i].start + k + 1 << seq[k] << ">N\t";
+	    ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" << c.chrname[refIndex] << ":" << gRegions[refIndex][i].start + k + 1 << "-" << gRegions[refIndex][i].start + k + targetlen << '\t'; 
 	    ofile << gRegions[refIndex][i].strand << '\t';
 	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';

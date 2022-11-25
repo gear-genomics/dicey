@@ -9,6 +9,15 @@
 namespace dicey
 {
 
+
+  inline void
+  generateGeneCode(std::vector<char> const& alphabet, std::string const code, uint32_t const codeSize, std::vector<std::string>& geneCodes) {
+    if (code.size() < codeSize) {
+      for(uint32_t i = 0; i < alphabet.size(); ++i) generateGeneCode(alphabet, code + alphabet[i], codeSize, geneCodes);
+    } else geneCodes.push_back(code);
+  }
+    
+  
   inline bool is_gz(boost::filesystem::path const& f) {
     std::ifstream bfile(f.string().c_str(), std::ios_base::binary | std::ios::ate);
     bfile.seekg(0, std::ios::beg);
