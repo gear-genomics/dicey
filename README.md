@@ -60,11 +60,7 @@ The default output is a JSON file that can also be stored in a file.
 
 ## Padlock probe design
 
-Dicey can design padlock probes for imaging mRNA in single cells. You need to download an indexed reference genome and a matching GTF file.
-
-`wget -r --no-parent -A 'Homo_sapiens.GRCh38*' https://gear.embl.de/data/tracy/`
-
-`mv gear.embl.de/data/tracy/Homo_sapiens.GRCh38* .`
+Dicey can design padlock probes for imaging mRNA in single cells. You need to download an [indexed reference genome](https://gear.embl.de/data/tracy/), e.g., for GRCh38:
 
 `wget http://ftp.ensembl.org/pub/release-107/gtf/homo_sapiens/Homo_sapiens.GRCh38.107.gtf.gz`
 
