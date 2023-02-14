@@ -149,7 +149,7 @@ namespace dicey
     // Single-end or paired-end?
     if (c.se) {
       // Read-length
-      if (c.readlength >= qual.size()) c.readlength = qual.size() - 1;
+      while (c.readlength >= qual.size()) qual.push_back('A');
       std::string readQual = qual.substr(0, c.readlength);
 
       // Hashing mode?
