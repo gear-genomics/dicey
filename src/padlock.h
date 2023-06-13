@@ -40,6 +40,7 @@ namespace dicey
 
   struct PadlockConfig {
     bool indel;
+    bool armMode;
     bool overlapping;
     bool computeAll;
     uint32_t distance;
@@ -125,10 +126,7 @@ namespace dicey
     // Parameters
     uint32_t maxNeighborHits = 0;
     if (c.indel) maxNeighborHits = 2 * c.distance; // first base deletion and last base deletion give a hit 
-    double armTMMax = 60;
     double armTMDiff = 2;
-    double probeTMMin = 65;
-    double probeTMMax = 75;
     double minGC = 0.4;
     double maxGC = 0.6;
     
@@ -236,6 +234,7 @@ namespace dicey
 	      return 1;
 	    }
 	    double arm1TM = oiarm1.temp;
+	    double armTMMax = 93 + arm1GC - 675 / c.armlen;  // ideal 81.5 instead of 93
 	    if (arm1TM > armTMMax) continue;
 	    
 	    // Arm2
@@ -252,6 +251,7 @@ namespace dicey
 	      return 1;
 	    }
 	    double arm2TM = oiarm2.temp;
+	    armTMMax = 93 + arm2GC - 675 / c.armlen;
 	    if ((arm2TM > armTMMax) || (std::abs(arm1TM - arm2TM) > armTMDiff)) continue;
 	    
 	    // Probe
@@ -268,7 +268,20 @@ namespace dicey
 	      return 1;
 	    }
 	    double probeTM = oiprobe.temp;
+	    double probeTMMin = 81.5 + probeGC - 675 / (2 * c.armlen);
+	    double probeTMMax = probeTMMin + 10;    
 	    if ((probeTM < probeTMMin) || (probeTM > probeTMMax)) continue;
+
+	    // Make sure the arms are unique
+	    std::size_t ucount1 = sdsl::count(fm_index, arm1.begin(), arm1.end());
+	    ucount1 += sdsl::count(fm_index, rarm1.begin(), rarm1.end());
+	    if ((c.armMode) && (ucount1 > 1)) continue;
+	    std::size_t ucount2 = sdsl::count(fm_index, arm2.begin(), arm2.end());
+	    ucount2 += sdsl::count(fm_index, rarm2.begin(), rarm2.end());
+	    if ((c.armMode) && (ucount2 > 1)) continue;
+
+	    // Probe mode: At least one arm unique
+	    if ((!c.armMode) && (ucount1 > 1) && (ucount2 > 1)) continue;
 	    
 	    // Search neighbors of arm1
 	    typedef std::set<std::string> TStringSet;
@@ -276,6 +289,7 @@ namespace dicey
 	    TFwdRevSearchSets fwrv(2, TStringSet());
 	    neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
 	    neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
+	    
 	    std::vector<uint32_t> hits(2, 0);
 	    //std::cerr << gRegions[refIndex][i].strand << ',' << arm1 << ',' << rarm1 << std::endl;
 	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
@@ -286,24 +300,25 @@ namespace dicey
 		hits[fwrvidx] += occs;
 	      }
 	    }
-	    //std::cerr << hits[0] << ',' << hits[1] << ',' << maxNeighborHits << std::endl;
-	    if (hits[0] + hits[1] > maxNeighborHits) continue;
+	    if ((c.armMode) && (hits[0] + hits[1] > maxNeighborHits)) continue;
 	    
 	    // Search neighbors of arm2
 	    fwrv.clear();
 	    fwrv.resize(2, TStringSet());
 	    neighbors(arm2, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
 	    neighbors(rarm2, alphabet, c.distance, c.indel, 10000, fwrv[1]);
-	    hits.clear();
-	    hits.resize(2, 0);
+	    std::vector<uint32_t> hitsOther(2, 0);
 	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
-	      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
-		std::string query = *it;
-		std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
-		hits[fwrvidx] += occs;
+		for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hitsOther[0] + hitsOther[1] <= maxNeighborHits)); ++it) {
+		  std::string query = *it;
+		  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+		  hitsOther[fwrvidx] += occs;
+		}
 	      }
-	    }
-	    if (hits[0] + hits[1] > maxNeighborHits) continue;
+	    if ((c.armMode) && (hitsOther[0] + hitsOther[1] > maxNeighborHits)) continue;
+
+	    // Probe mode
+	    if ((!c.armMode) && (hits[0] + hits[1] > maxNeighborHits) && (hitsOther[0] + hitsOther[1] > maxNeighborHits)) continue;
 	    
 	    // Final padlock
 	    std::string padlock = rarm1 + c.spacerleft + c.anchor + geneInfo[gRegions[refIndex][i].lid].barcode + c.spacerright + rarm2;
@@ -379,7 +394,6 @@ namespace dicey
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
-      ("overlapping,v", "allow overlapping probes")
       ;
 
 
@@ -391,6 +405,8 @@ namespace dicey
       ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("armlen,m", boost::program_options::value<uint32_t>(&c.armlen)->default_value(20), "probe arm length")
+      ("probe,p", "apply distance to entire probe, i.e., only one arm needs to be unique")
+      ("overlapping,v", "allow overlapping probes")
       ;
 
     
@@ -429,6 +445,8 @@ namespace dicey
     // Cmd switches
     if (vm.count("hamming")) c.indel = false;
     else c.indel = true;
+    if (vm.count("probe")) c.armMode = false;
+    else c.armMode = true;
     if (vm.count("overlapping")) c.overlapping = true;
     else c.overlapping = false;
 
