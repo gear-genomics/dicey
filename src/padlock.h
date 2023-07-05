@@ -39,6 +39,7 @@ namespace dicey
 {
 
   struct PadlockConfig {
+    bool json;
     bool indel;
     bool armMode;
     bool overlapping;
@@ -380,6 +381,27 @@ namespace dicey
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] Done." << std::endl;
     return 0;
   }
+
+  inline int
+  errorMessage(PadlockConfig const& c, std::string const& errmsg) {
+    if (c.json) {
+      boost::iostreams::filtering_ostream rcfile;
+      rcfile.push(boost::iostreams::gzip_compressor());
+      rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+      rcfile << "{";
+      rcfile << "\"errors\": [";
+      nlohmann::json err;
+      err["type"] = "error";
+      err["title"] = errmsg;
+      rcfile << err.dump();
+      rcfile << "]}";
+      rcfile.pop();
+      rcfile.pop();
+    } else {
+      std::cerr << errmsg << std::endl;
+    }
+    return 1;
+  }
   
 
   int padlock(int argc, char** argv) {
@@ -394,6 +416,7 @@ namespace dicey
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
+      ("json,j", "use gzip json output format")
       ;
 
 
@@ -445,6 +468,8 @@ namespace dicey
     // Cmd switches
     if (vm.count("hamming")) c.indel = false;
     else c.indel = true;
+    if (vm.count("json")) c.json = true;
+    else c.json = false;
     if (vm.count("probe")) c.armMode = false;
     else c.armMode = true;
     if (vm.count("overlapping")) c.overlapping = true;
@@ -452,8 +477,17 @@ namespace dicey
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
-      std::cerr << "Error: Genome does not exist!" << std::endl;
-      return 1;
+      return errorMessage(c, "Error: Genome does not exist!");
+    }
+
+    // Check GTF file
+    if (!(boost::filesystem::exists(c.gtfFile) && boost::filesystem::is_regular_file(c.gtfFile) && boost::filesystem::file_size(c.gtfFile))) {
+      return errorMessage(c, "Error: GTF file does not exist!");
+    }
+
+    // Check barcodes file
+    if (!(boost::filesystem::exists(c.barcodes) && boost::filesystem::is_regular_file(c.barcodes) && boost::filesystem::file_size(c.barcodes))) {
+      return errorMessage(c, "Error: Barcode FASTA file does not exist!");
     }
 
     // Fill genome map
