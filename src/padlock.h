@@ -228,7 +228,11 @@ namespace dicey
       meta["jsonfile"] = c.jsonfile.string();
       meta["hamming"] = (!c.indel);
       rcfile << meta.dump() << ',';
-      rcfile << "\"data\":[";
+      rcfile << "\"data\":{";
+      rcfile << "\"columns\": [";
+      rcfile << "\"Gene\", \"Symbol\", \"Code\", \"Position\", \"UCSC\", \"Strand\", \"ExonCoordinates\", \"ProbeSeq\", \"SpacerLeft\", \"AnchorSeq\", \"BarcodeSeq\", \"SpacerRight\", \"PadlockSeq\", \"Arm1TM\", \"Arm2TM\", \"BarcodeTM\", \"ProbeTM\", \"Arm1GC\", \"Arm2GC\", \"BarcodeGC\", \"ProbeGC\"";
+      rcfile << "]," << std::endl;
+      rcfile << "\"rows\": [" << std::endl;
     }
     
     // Outfile
@@ -390,29 +394,29 @@ namespace dicey
 	    if (c.json) {
 	      if (!firstRec) rcfile << ',';
 	      else firstRec = false;
-	      nlohmann::json j;
-	      j["Gene"] = geneInfo[gRegions[refIndex][i].lid].id;
-	      j["Symbol"] = geneInfo[gRegions[refIndex][i].lid].symbol;
-	      j["Code"] = geneInfo[gRegions[refIndex][i].lid].code;
-	      j["Position"] = c.chrname[refIndex] + ':' + boost::lexical_cast<std::string>(startpos);
-	      j["UCSC"] = "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" + c.chrname[refIndex] + ":" + boost::lexical_cast<std::string>(startpos) + "-" + boost::lexical_cast<std::string>(startpos + targetlen - 1);
-	      j["Strand"] = gRegions[refIndex][i].strand;
-	      j["ExonCoordinates"] = c.chrname[refIndex] + ':' + boost::lexical_cast<std::string>(gRegions[refIndex][i].start + 1) + '-' + boost::lexical_cast<std::string>(gRegions[refIndex][i].end + 1);
-	      j["ProbeSeq"] = arm1 + '-' + arm2;
-	      j["SpacerLeft"] = c.spacerleft;
-	      j["AnchorSeq"] = c.anchor;
-	      j["BarcodeSeq"] = geneInfo[gRegions[refIndex][i].lid].barcode;
-	      j["SpacerRight"] = c.spacerright;
-	      j["PadlockSeq"] = padlock;
-	      j["Arm1TM"] = boost::lexical_cast<std::string>(arm1TM);
-	      j["Arm2TM"] = boost::lexical_cast<std::string>(arm2TM);
-	      j["BarcodeTM"] = boost::lexical_cast<std::string>(barTM);
-	      j["ProbeTM"] = boost::lexical_cast<std::string>(probeTM);
-	      j["Arm1GC"] = boost::lexical_cast<std::string>(arm1GC);
-	      j["Arm2GC"] = boost::lexical_cast<std::string>(arm2GC);
-	      j["BarcodeGC"] = boost::lexical_cast<std::string>(barGC);
-	      j["ProbeGC"] = boost::lexical_cast<std::string>(probeGC);
-	      rcfile << j.dump();
+	      rcfile << "[";
+	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].id << "\", ";
+	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].symbol << "\", ";
+	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].code << "\", ";
+	      rcfile << "\"" << c.chrname[refIndex] << ':' << startpos << "\", ";
+	      rcfile << "\"" << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << "\", ";
+	      rcfile << "\"" << gRegions[refIndex][i].strand << "\", ";
+	      rcfile << "\"" << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << "\", ";
+	      rcfile << "\"" << arm1 << '-' << arm2 << "\", ";
+	      rcfile << "\"" << c.spacerleft << "\", ";
+	      rcfile << "\"" << c.anchor << "\", ";
+	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].barcode << "\", ";
+	      rcfile << "\"" << c.spacerright << "\", ";
+	      rcfile << "\"" << padlock << "\", ";
+	      rcfile << "\"" << arm1TM << "\", ";
+	      rcfile << "\"" << arm2TM << "\", ";
+	      rcfile << "\"" << barTM << "\", ";
+	      rcfile << "\"" << probeTM << "\", ";
+	      rcfile << "\"" << arm1GC << "\", ";
+	      rcfile << "\"" << arm2GC << "\", ";
+	      rcfile << "\"" << barGC << "\", ";
+	      rcfile << "\"" << probeGC << "\"";
+	      rcfile << ']';
 	    }
 	    
 	    // Increase k for non-overlapping probes
@@ -425,7 +429,7 @@ namespace dicey
     fai_destroy(fai);
     ofile.close();
     if (c.json) {
-      rcfile << "]}";
+      rcfile << "]}}";
       rcfile.pop();
       rcfile.pop();
     }
