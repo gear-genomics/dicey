@@ -61,6 +61,7 @@ namespace dicey
     boost::filesystem::path barcodes;
     boost::filesystem::path primer3Config;
     boost::filesystem::path outfile;
+    boost::filesystem::path jsonfile;
     boost::filesystem::path genome;
     boost::filesystem::path infile;
   };
@@ -203,6 +204,33 @@ namespace dicey
     char tmp[] = {'A', 'C', 'G', 'T'};
     TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
 
+    // JSON output
+    boost::iostreams::filtering_ostream rcfile;
+    bool firstRec = true;
+    if (c.json) {
+      rcfile.push(boost::iostreams::gzip_compressor());
+      rcfile.push(boost::iostreams::file_sink(c.jsonfile.c_str(), std::ios_base::out | std::ios_base::binary));
+      rcfile << "{";
+      rcfile << "\"errors\": [],";
+      // Meta information
+      rcfile << "\"meta\":";
+      nlohmann::json meta;
+      meta["version"] = diceyVersionNumber;
+      meta["subcommand"] = "padlock";
+      meta["armlength"] = c.armlen;
+      meta["distance"] = c.distance;
+      meta["distance"] = c.distance;
+      meta["genome"] = c.genome.string();
+      meta["infile"] = c.infile.string();
+      meta["outfile"] = c.outfile.string();
+      meta["barcodes"] = c.barcodes.string();
+      meta["gtf"] = c.gtfFile.string();
+      meta["jsonfile"] = c.jsonfile.string();
+      meta["hamming"] = (!c.indel);
+      rcfile << meta.dump() << ',';
+      rcfile << "\"data\":[";
+    }
+    
     // Outfile
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Compute padlocks" << std::endl;
     std::ofstream ofile(c.outfile.string().c_str());
@@ -359,6 +387,34 @@ namespace dicey
 	    ofile << arm1TM << '\t' << arm2TM << '\t' << barTM << '\t' << probeTM << '\t';
 	    ofile << arm1GC << '\t' << arm2GC << '\t' << barGC << '\t' << probeGC << std::endl;
 
+	    if (c.json) {
+	      if (!firstRec) rcfile << ',';
+	      else firstRec = false;
+	      nlohmann::json j;
+	      j["Gene"] = geneInfo[gRegions[refIndex][i].lid].id;
+	      j["Symbol"] = geneInfo[gRegions[refIndex][i].lid].symbol;
+	      j["Code"] = geneInfo[gRegions[refIndex][i].lid].code;
+	      j["Position"] = c.chrname[refIndex] + ':' + boost::lexical_cast<std::string>(startpos);
+	      j["UCSC"] = "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" + c.chrname[refIndex] + ":" + boost::lexical_cast<std::string>(startpos) + "-" + boost::lexical_cast<std::string>(startpos + targetlen - 1);
+	      j["Strand"] = gRegions[refIndex][i].strand;
+	      j["ExonCoordinates"] = c.chrname[refIndex] + ':' + boost::lexical_cast<std::string>(gRegions[refIndex][i].start + 1) + '-' + boost::lexical_cast<std::string>(gRegions[refIndex][i].end + 1);
+	      j["ProbeSeq"] = arm1 + '-' + arm2;
+	      j["SpacerLeft"] = c.spacerleft;
+	      j["AnchorSeq"] = c.anchor;
+	      j["BarcodeSeq"] = geneInfo[gRegions[refIndex][i].lid].barcode;
+	      j["SpacerRight"] = c.spacerright;
+	      j["PadlockSeq"] = padlock;
+	      j["Arm1TM"] = boost::lexical_cast<std::string>(arm1TM);
+	      j["Arm2TM"] = boost::lexical_cast<std::string>(arm2TM);
+	      j["BarcodeTM"] = boost::lexical_cast<std::string>(barTM);
+	      j["ProbeTM"] = boost::lexical_cast<std::string>(probeTM);
+	      j["Arm1GC"] = boost::lexical_cast<std::string>(arm1GC);
+	      j["Arm2GC"] = boost::lexical_cast<std::string>(arm2GC);
+	      j["BarcodeGC"] = boost::lexical_cast<std::string>(barGC);
+	      j["ProbeGC"] = boost::lexical_cast<std::string>(probeGC);
+	      rcfile << j.dump();
+	    }
+	    
 	    // Increase k for non-overlapping probes
 	    if (!c.overlapping) k += targetlen - 1;
 	  }
@@ -368,6 +424,11 @@ namespace dicey
     }
     fai_destroy(fai);
     ofile.close();
+    if (c.json) {
+      rcfile << "]}";
+      rcfile.pop();
+      rcfile.pop();
+    }
     
     // Clean-up
     primer3thal::destroy_thal_structures();
@@ -415,8 +476,8 @@ namespace dicey
       ("gtf,t", boost::program_options::value<boost::filesystem::path>(&c.gtfFile), "gtf/gff3 file")
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
+      ("json,j", boost::program_options::value<boost::filesystem::path>(&c.jsonfile), "gzipped JSON file [optional]")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
-      ("json,j", "use gzip json output format")
       ;
 
 
