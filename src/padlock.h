@@ -77,6 +77,7 @@ namespace dicey
     else if (fn.find("BDGP6") != std::string::npos) c.ucscDB = "dm6";
     else if (fn.find("GRCm38") != std::string::npos) c.ucscDB = "mm10";
     else if (fn.find("MEDAKA1") != std::string::npos) c.ucscDB = "oryLat2";
+    else if (fn.find("TAIR10") != std::string::npos) c.ucscDB = "hub_1936559_araTha1";
     else if (fn.find("Saccharomyces_cerevisiae.R64") != std::string::npos) c.ucscDB = "sacCer3";
     else c.ucscDB = "Unknown";
   }
