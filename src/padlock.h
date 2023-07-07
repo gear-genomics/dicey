@@ -51,6 +51,7 @@ namespace dicey
     double dv;
     double dna_conc;
     double dntp;
+    std::string ucscDB;
     std::string anchor;
     std::string spacerleft;
     std::string spacerright;    
@@ -66,6 +67,14 @@ namespace dicey
     boost::filesystem::path infile;
   };
 
+  inline void
+  guessUcscDb(PadlockConfig& c) {
+    std::string fn = c.genome.stem().string();
+    if (fn.find("GRCh37") != std::string::npos) c.ucscDB = "hg19";
+    else if (fn.find("GRCh38") != std::string::npos) c.ucscDB = "hg38";
+    else if (fn.find("GRCz10") != std::string::npos) c.ucscDB = "danRer10";
+    else c.ucscDB = "Unknown";
+  }
 
   inline void
   _outputGeneCodes() {
@@ -380,7 +389,7 @@ namespace dicey
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].code << '\t';	    
 	    ofile << c.chrname[refIndex] << ':' << startpos << '\t';
-	    ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << '\t'; 
+	    ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << '\t'; 
 	    ofile << gRegions[refIndex][i].strand << '\t';
 	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';
@@ -399,7 +408,7 @@ namespace dicey
 	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].symbol << "\", ";
 	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].code << "\", ";
 	      rcfile << "\"" << c.chrname[refIndex] << ':' << startpos << "\", ";
-	      rcfile << "\"" << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=hg38&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << "\", ";
+	      rcfile << "\"" << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << "\", ";
 	      rcfile << "\"" << gRegions[refIndex][i].strand << "\", ";
 	      rcfile << "\"" << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << "\", ";
 	      rcfile << "\"" << arm1 << '-' << arm2 << "\", ";
@@ -544,6 +553,7 @@ namespace dicey
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
       return errorMessage(c, "Error: Genome does not exist!");
     }
+    guessUcscDb(c);
 
     // Check GTF file
     if (!(boost::filesystem::exists(c.gtfFile) && boost::filesystem::is_regular_file(c.gtfFile) && boost::filesystem::file_size(c.gtfFile))) {
