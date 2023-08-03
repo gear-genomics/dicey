@@ -42,7 +42,7 @@ You can also redirect the output in JSON format to a file.
 
 `dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
 
-Pre-built genome indices for commonly used reference genomes are available for [download here](https://gear.embl.de/data/tracy/).
+Pre-built genome indices for commonly used reference genomes are available for [download here](https://gear-genomics.embl.de/data/tracy/).
 
 
 ## In-silico PCR for a set of primers
@@ -60,7 +60,7 @@ The default output is a JSON file that can also be stored in a file.
 
 ## Padlock probe design
 
-Dicey can design padlock probes for imaging mRNA in single cells. You need to download an [indexed reference genome](https://gear.embl.de/data/tracy/) and a matching GTF file, e.g., for GRCh38:
+Dicey can design padlock probes for imaging mRNA in single cells. You need to download an [indexed reference genome](https://gear-genomics.embl.de/data/tracy/) and a matching GTF file, e.g., for GRCh38:
 
 `wget http://ftp.ensembl.org/pub/release-107/gtf/homo_sapiens/Homo_sapiens.GRCh38.107.gtf.gz`
 
