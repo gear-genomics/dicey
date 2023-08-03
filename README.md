@@ -9,7 +9,7 @@
 
 Dicey is available as a [Bioconda package](https://anaconda.org/bioconda/dicey), as a pre-compiled statically linked binary from [Dicey's github release page](https://github.com/gear-genomics/dicey/releases), as a singularity container [SIF file](https://github.com/gear-genomics/dicey/releases) or as a minimal [Docker container](https://hub.docker.com/r/geargenomics/dicey/).
 
-`apt-get install -y build-essential g++ cmake zlib1g-dev libbz2-dev liblzma-dev libboost-all-dev`
+`apt-get install -y build-essential g++ cmake zlib1g-dev libbz2-dev liblzma-dev libboost-all-dev autoconf`
 
 `git clone --recursive https://github.com/gear-genomics/dicey.git`
 
