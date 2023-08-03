@@ -96,8 +96,3 @@ BMC Genomics 21, 230 (2020).
 ## License
 
 Dicey is distributed under the GPL license. Consult the accompanying [LICENSE](https://github.com/gear-genomics/dicey/blob/master/LICENSE) file for more details.
-
-
-## Questions
-
-In case of questions feel free to send us an [email](https://www-db.embl.de/EMBLPersonGroup-PersonPicture/MailForm/?recipient=ggenomics).
