@@ -83,6 +83,7 @@ _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t const in
       if (dist < inputdist) _insert(strset, query);
     }
   }
+  if (inputdist == 0) _insert(strset, query);
 }
       
 
