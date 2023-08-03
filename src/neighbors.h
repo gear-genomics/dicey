@@ -83,13 +83,13 @@ _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t const in
       if (dist < inputdist) _insert(strset, query);
     }
   }
-  if (inputdist == 0) _insert(strset, query);
 }
-      
+
 
 template<typename TAlphabet, typename TStringSet>
 inline void
 neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bool indel, uint32_t maxsize, TStringSet& strset) {
+  _insert(strset, query);
   _neighbors(query, alphabet, dist, dist, indel, 0, maxsize, strset);
 }
 
