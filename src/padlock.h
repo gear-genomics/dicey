@@ -141,7 +141,7 @@ namespace dicey
 #endif
 
     // Parameters
-    uint32_t maxNeighborHits = 0;
+    uint32_t maxNeighborHits = 1;  // Only actual sequence gives a hit
     if (c.indel) maxNeighborHits = 2 * c.distance; // first base deletion and last base deletion give a hit 
     double armTMDiff = 2;
     double minGC = 0.4;
@@ -332,41 +332,43 @@ namespace dicey
 	    if ((!c.armMode) && (ucount1 > 1) && (ucount2 > 1)) continue;
 	    
 	    // Search neighbors of arm1
-	    typedef std::set<std::string> TStringSet;
-	    typedef std::vector<TStringSet> TFwdRevSearchSets;
-	    TFwdRevSearchSets fwrv(2, TStringSet());
-	    neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
-	    neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
+	    if (c.distance > 0) {
+	      typedef std::set<std::string> TStringSet;
+	      typedef std::vector<TStringSet> TFwdRevSearchSets;
+	      TFwdRevSearchSets fwrv(2, TStringSet());
+	      neighbors(arm1, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // X-bp difference, at most 10000 neighbors
+	      neighbors(rarm1, alphabet, c.distance, c.indel, 10000, fwrv[1]);
 	    
-	    std::vector<uint32_t> hits(2, 0);
-	    //std::cerr << gRegions[refIndex][i].strand << ',' << arm1 << ',' << rarm1 << std::endl;
-	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
-	      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
-		std::string query = *it;
-		std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
-		//if (occs > 0) std::cerr << *it << ',' << occs << std::endl;
-		hits[fwrvidx] += occs;
+	      std::vector<uint32_t> hits(2, 0);
+	      //std::cerr << gRegions[refIndex][i].strand << ',' << arm1 << ',' << rarm1 << std::endl;
+	      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+		for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits[0] + hits[1] <= maxNeighborHits)); ++it) {
+		  std::string query = *it;
+		  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+		  //if (occs > 0) std::cerr << *it << ',' << occs << std::endl;
+		  hits[fwrvidx] += occs;
+		}
 	      }
-	    }
-	    if ((c.armMode) && (hits[0] + hits[1] > maxNeighborHits)) continue;
+	      if ((c.armMode) && (hits[0] + hits[1] > maxNeighborHits)) continue;
 	    
-	    // Search neighbors of arm2
-	    fwrv.clear();
-	    fwrv.resize(2, TStringSet());
-	    neighbors(arm2, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
-	    neighbors(rarm2, alphabet, c.distance, c.indel, 10000, fwrv[1]);
-	    std::vector<uint32_t> hitsOther(2, 0);
-	    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+	      // Search neighbors of arm2
+	      fwrv.clear();
+	      fwrv.resize(2, TStringSet());
+	      neighbors(arm2, alphabet, c.distance, c.indel, 10000, fwrv[0]);  // 1-bp difference, at most 10000 neighbors
+	      neighbors(rarm2, alphabet, c.distance, c.indel, 10000, fwrv[1]);
+	      std::vector<uint32_t> hitsOther(2, 0);
+	      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
 		for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hitsOther[0] + hitsOther[1] <= maxNeighborHits)); ++it) {
 		  std::string query = *it;
 		  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
 		  hitsOther[fwrvidx] += occs;
 		}
 	      }
-	    if ((c.armMode) && (hitsOther[0] + hitsOther[1] > maxNeighborHits)) continue;
+	      if ((c.armMode) && (hitsOther[0] + hitsOther[1] > maxNeighborHits)) continue;
 
-	    // Probe mode
-	    if ((!c.armMode) && (hits[0] + hits[1] > maxNeighborHits) && (hitsOther[0] + hitsOther[1] > maxNeighborHits)) continue;
+	      // Probe mode
+	      if ((!c.armMode) && (hits[0] + hits[1] > maxNeighborHits) && (hitsOther[0] + hitsOther[1] > maxNeighborHits)) continue;
+	    }
 	    
 	    // Final padlock
 	    std::string padlock = rarm1 + c.spacerleft + c.anchor + geneInfo[gRegions[refIndex][i].lid].barcode + c.spacerright + rarm2;
