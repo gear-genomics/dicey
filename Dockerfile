@@ -39,15 +39,16 @@ RUN cd /opt \
 
 # Multi-stage build
 FROM alpine:latest
+RUN apk add --no-cache bash
 RUN mkdir -p /opt/dicey/bin
 WORKDIR /opt/dicey/bin
 COPY --from=0 /opt/dicey/bin/dicey .
 
 # Workdir
-WORKDIR /root/
+WORKDIR /home
 
 # Add dicey to PATH
 ENV PATH="/opt/dicey/bin:${PATH}"
 
 # by default /bin/sh is executed
-CMD ["/bin/sh"]
+CMD ["/bin/bash"]
