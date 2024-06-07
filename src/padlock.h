@@ -54,7 +54,9 @@ namespace dicey
     std::string ucscDB;
     std::string anchor;
     std::string spacerleft;
-    std::string spacerright;    
+    std::string spacerright;
+    std::string feature;
+    std::string idname;
     std::set<std::string> geneset;
     std::vector<std::string> chrname;
     std::map<std::string, int32_t> nchr;
@@ -264,7 +266,7 @@ namespace dicey
       rcfile << meta.dump() << ',';
       rcfile << "\"data\":{";
       rcfile << "\"columns\": [";
-      rcfile << "\"Gene\", \"Symbol\", \"Code\", \"Position\", \"UCSC\", \"Strand\", \"ExonCoordinates\", \"ProbeSeq\", \"SpacerLeft\", \"AnchorSeq\", \"BarcodeSeq\", \"SpacerRight\", \"PadlockSeq\", \"Arm1TM\", \"Arm2TM\", \"BarcodeTM\", \"ProbeTM\", \"Arm1GC\", \"Arm2GC\", \"BarcodeGC\", \"ProbeGC\"";
+      rcfile << "\"Gene\", \"Symbol\", \"Code\", \"Position\", \"UCSC\", \"Strand\", \"FeatureCoordinates\", \"ProbeSeq\", \"SpacerLeft\", \"AnchorSeq\", \"BarcodeSeq\", \"SpacerRight\", \"PadlockSeq\", \"Arm1TM\", \"Arm2TM\", \"BarcodeTM\", \"ProbeTM\", \"Arm1GC\", \"Arm2GC\", \"BarcodeGC\", \"ProbeGC\"";
       rcfile << "]," << std::endl;
       rcfile << "\"rows\": [" << std::endl;
     }
@@ -272,7 +274,7 @@ namespace dicey
     // Outfile
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Compute padlocks" << std::endl;
     std::ofstream ofile(c.outfile.string().c_str());
-    ofile << "Gene\tSymbol\tCode\tPosition\tUCSC\tStrand\tExonCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
+    ofile << "Gene\tSymbol\tCode\tPosition\tUCSC\tStrand\tFeatureCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
     faidx_t* fai = fai_load(c.genome.string().c_str());
     uint32_t targetlen = 2 * c.armlen;
@@ -536,6 +538,8 @@ namespace dicey
       ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("armlen,m", boost::program_options::value<uint32_t>(&c.armlen)->default_value(20), "probe arm length")
+      ("attribute,u", boost::program_options::value<std::string>(&c.idname)->default_value("gene_id"), "gtf/gff3 attribute")
+      ("feature,f", boost::program_options::value<std::string>(&c.feature)->default_value("exon"), "gtf/gff3 feature")
       ("probe,p", "apply distance to entire probe, i.e., only one arm needs to be unique")
       ("overlapping,v", "allow overlapping probes")
       ;
