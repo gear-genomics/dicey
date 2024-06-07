@@ -89,12 +89,6 @@ namespace dicey {
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "GTF feature parsing" << std::endl;
 
-    // Check gzip
-    if (!is_gz(c.gtfFile)) {
-      std::cerr << "GTF file is not gzipped!" << std::endl;
-      return 0;
-    }
-
     // Map IDs to integer
     typedef std::map<std::string, int32_t> TIdMap;
     TIdMap idMap;
@@ -103,9 +97,12 @@ namespace dicey {
     int32_t eid = 0;
 
     // Parse GTF
-    std::ifstream file(c.gtfFile.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream file;
     boost::iostreams::filtering_streambuf<boost::iostreams::input> dataIn;
-    dataIn.push(boost::iostreams::gzip_decompressor());
+    if (is_gz(c.gtfFile)) {
+      file.open(c.gtfFile.string().c_str(), std::ios_base::in | std::ios_base::binary);
+      dataIn.push(boost::iostreams::gzip_decompressor(), 16*1024);
+    } else file.open(c.gtfFile.string().c_str(), std::ios_base::in);
     dataIn.push(file);
     std::istream instream(&dataIn);
     std::string gline;
@@ -215,6 +212,9 @@ namespace dicey {
 	}
       }
     }
+    dataIn.pop();
+    if (is_gz(c.gtfFile)) dataIn.pop();
+    file.close();
     return geneInfo.size();
   }
 

@@ -182,29 +182,48 @@ namespace dicey
     typedef std::vector<GeneInfo> TGeneInfo;
     TGeneInfo geneInfo;
     parseGTF(c, gRegions, geneInfo);
-    
+
     // Load barcodes
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Load barcodes" << std::endl;
     uint32_t numBarcodes = 0;
     if (!numBarcodes) {
-      faidx_t* fai = fai_load(c.barcodes.string().c_str());
-      for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
-	int32_t seqlen;
-	char* seq = faidx_fetch_seq(fai, faidx_iseq(fai, refIndex), 0, 20, &seqlen);
-	if (seqlen != 20) {
-	  std::cerr << "Invalid barcode length! Should be 20bp." << std::endl;
-	  return 1;
+      // Open barcode file
+      std::ifstream barFile;
+      boost::iostreams::filtering_streambuf<boost::iostreams::input> dataIn;
+      if (is_gz(c.barcodes)) {
+	barFile.open(c.barcodes.string().c_str(), std::ios_base::in | std::ios_base::binary);
+	dataIn.push(boost::iostreams::gzip_decompressor(), 16*1024);
+      } else barFile.open(c.barcodes.string().c_str(), std::ios_base::in);
+      dataIn.push(barFile);
+      std::istream instream(&dataIn);
+      std::string line;
+      uint64_t lcount = 0;
+      std::string colcode;
+      std::string barcode;
+      while(std::getline(instream, line)) {
+	if (!line.empty()) {
+	  if (lcount % 2 == 0) {
+	    if (line[0] == '>') {
+	      if (line.at(line.length() - 1) == '\r' ) colcode = line.substr(1, line.length() - 2);
+	      else colcode = line.substr(1);
+	    }
+	  } else {
+	    if (line.at(line.length() - 1) == '\r' ) barcode = boost::to_upper_copy(line.substr(0, line.length() - 1));
+	    else barcode = boost::to_upper_copy(line);
+	    if (numBarcodes < geneInfo.size()) {
+	      geneInfo[numBarcodes].barcode = barcode;
+	      geneInfo[numBarcodes].code = colcode;
+	      ++numBarcodes;
+	    } else break;
+	  }
+	  ++lcount;
 	}
-	if (numBarcodes < geneInfo.size()) {
-	  geneInfo[numBarcodes].barcode = boost::to_upper_copy(std::string(seq));
-	  geneInfo[numBarcodes].code = std::string(faidx_iseq(fai, refIndex));
-	}
-	++numBarcodes;
-	free(seq);
       }
-      fai_destroy(fai);
+      dataIn.pop();
+      if (is_gz(c.barcodes)) dataIn.pop();
+      barFile.close();
     }
-    
+
     // Reference index
     csa_wt<> fm_index;  
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
