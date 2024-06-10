@@ -44,6 +44,8 @@ namespace dicey
     bool armMode;
     bool overlapping;
     bool computeAll;
+    bool inputFasta;
+    bool absent;
     uint32_t distance;
     uint32_t armlen;
     double temp;
@@ -144,7 +146,10 @@ namespace dicey
 
     // Parameters
     uint32_t maxNeighborHits = 1;  // Only actual sequence gives a hit
-    if (c.indel) maxNeighborHits = 2 * c.distance; // first base deletion and last base deletion give a hit 
+    if (c.indel) maxNeighborHits = 2 * c.distance; // first base deletion and last base deletion give a hit
+    if ((c.inputFasta) && (c.absent)) maxNeighborHits = 0;
+    uint32_t expSeqHits = 1; // Only actual arm gives a hit
+    if ((c.inputFasta) && (c.absent)) expSeqHits = 0; // FASTA seq. input not part of reference
     double armTMDiff = 2;
     double minGC = 0.4;
     double maxGC = 0.6;
@@ -180,10 +185,16 @@ namespace dicey
     typedef std::vector<IntervalLabel> TChromosomeRegions;
     typedef std::vector<TChromosomeRegions> TGenomicRegions;
     TGenomicRegions gRegions;
-    gRegions.resize(c.nchr.size(), TChromosomeRegions());
     typedef std::vector<GeneInfo> TGeneInfo;
     TGeneInfo geneInfo;
-    parseGTF(c, gRegions, geneInfo);
+    gRegions.resize(c.nchr.size(), TChromosomeRegions());
+    if (c.inputFasta) {
+      // FASTA input
+      parseFastaSeqs(c, gRegions, geneInfo);
+    } else {
+      // Gene list
+      parseGTF(c, gRegions, geneInfo);
+    }
 
     // Load barcodes
     std::cout << '[' << boost::posix_time::to_simple_string(boost::posix_time::second_clock::local_time()) << "] " << "Load barcodes" << std::endl;
@@ -276,7 +287,9 @@ namespace dicey
     std::ofstream ofile(c.outfile.string().c_str());
     ofile << "Gene\tSymbol\tCode\tPosition\tUCSC\tStrand\tFeatureCoordinates\tProbeSeq\tSpacerLeft\tAnchorSeq\tBarcodeSeq\tSpacerRight\tPadlockSeq\tArm1TM\tArm2TM\tBarcodeTM\tProbeTM\tArm1GC\tArm2GC\tBarcodeGC\tProbeGC" << std::endl;
     // Parse chromosomes
-    faidx_t* fai = fai_load(c.genome.string().c_str());
+    faidx_t* fai;
+    if (c.inputFasta) fai = fai_load(c.infile.string().c_str());
+    else fai = fai_load(c.genome.string().c_str());
     uint32_t targetlen = 2 * c.armlen;
     for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
       for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
@@ -344,13 +357,13 @@ namespace dicey
 	    // Make sure the arms are unique
 	    std::size_t ucount1 = sdsl::count(fm_index, arm1.begin(), arm1.end());
 	    ucount1 += sdsl::count(fm_index, rarm1.begin(), rarm1.end());
-	    if ((c.armMode) && (ucount1 > 1)) continue;
+	    if ((c.armMode) && (ucount1 > expSeqHits)) continue;
 	    std::size_t ucount2 = sdsl::count(fm_index, arm2.begin(), arm2.end());
 	    ucount2 += sdsl::count(fm_index, rarm2.begin(), rarm2.end());
-	    if ((c.armMode) && (ucount2 > 1)) continue;
+	    if ((c.armMode) && (ucount2 > expSeqHits)) continue;
 
 	    // Probe mode: At least one arm unique
-	    if ((!c.armMode) && (ucount1 > 1) && (ucount2 > 1)) continue;
+	    if ((!c.armMode) && (ucount1 > expSeqHits) && (ucount2 > expSeqHits)) continue;
 	    
 	    // Search neighbors of arm1
 	    if (c.distance > 0) {
@@ -418,7 +431,8 @@ namespace dicey
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].code << '\t';	    
 	    ofile << c.chrname[refIndex] << ':' << startpos << '\t';
-	    ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << '\t'; 
+	    if (c.inputFasta) ofile << "n.a." << '\t';
+	    else ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << '\t'; 
 	    ofile << gRegions[refIndex][i].strand << '\t';
 	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';
@@ -441,7 +455,8 @@ namespace dicey
 	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].symbol << "\", ";
 	      rcfile << "\"" << geneInfo[gRegions[refIndex][i].lid].code << "\", ";
 	      rcfile << "\"" << c.chrname[refIndex] << ':' << startpos << "\", ";
-	      rcfile << "\"" << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << "\", ";
+	      if (c.inputFasta) rcfile << "\"n.a.\", ";
+	      else rcfile << "\"" << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << "\", ";
 	      rcfile << "\"" << gRegions[refIndex][i].strand << "\", ";
 	      rcfile << "\"" << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << "\", ";
 	      rcfile << "\"" << arm1 << '-' << arm2 << "\", ";
@@ -526,6 +541,7 @@ namespace dicey
       ("config,i", boost::program_options::value<boost::filesystem::path>(&c.primer3Config)->default_value("./src/primer3_config/"), "primer3 config directory")
       ("outfile,o", boost::program_options::value<boost::filesystem::path>(&c.outfile)->default_value("out.tsv"), "output file")
       ("json,j", boost::program_options::value<boost::filesystem::path>(&c.jsonfile), "gzipped JSON file [optional]")
+      ("absent,e", "source sequence is absent in reference genome [only relevant for FASTA input]")
       ("hamming,n", "use hamming neighborhood instead of edit distance")
       ;
 
@@ -572,7 +588,11 @@ namespace dicey
 
     // Check command line arguments
     if ((vm.count("help")) || (!vm.count("infile")) || (!vm.count("genome")) || (!vm.count("barcodes")) || (!vm.count("gtf"))) {
-      std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> <gene.list.file>" << std::endl;
+      std::cout << "Usage:" << std::endl;
+      std::cout << "Probes for one gene: " << "dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> ENSG00000171862" << std::endl;
+      std::cout << "Probes for one transcript: " << "dicey " << argv[0] << " [OPTIONS] -u transcript_id -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> ENST00000406757" << std::endl;
+      std::cout << "Probes for a set of genes: " << "dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> <gene.list.file>" << std::endl;
+      std::cout << "Probes for custom FASTA input: " << "dicey " << argv[0] << " [OPTIONS] -g <ref.fa.gz> -t <ref.gtf.gz> -b <barcodes.fa.gz> <sequences.fa>" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
@@ -580,6 +600,8 @@ namespace dicey
     // Cmd switches
     if (vm.count("hamming")) c.indel = false;
     else c.indel = true;
+    if (vm.count("absent")) c.absent = true;
+    else c.absent = false;
     if (vm.count("json")) c.json = true;
     else c.json = false;
     if (vm.count("probe")) c.armMode = false;
@@ -603,40 +625,57 @@ namespace dicey
       return errorMessage(c, "Error: Barcode FASTA file does not exist!");
     }
 
-    // Fill genome map
-    if (c.nchr.empty()) {
-      faidx_t* fai = fai_load(c.genome.string().c_str());
-      c.chrname.resize(faidx_nseq(fai));
-      for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
-	std::string chrName = faidx_iseq(fai, refIndex);
-	//std::cerr << chrName << ',' << refIndex << std::endl;
-	c.nchr.insert(std::make_pair(chrName, refIndex));
-	c.chrname[refIndex] = chrName;
-      }
-      fai_destroy(fai);
-    }
-
     // Check gene list
     c.computeAll = false;
+    c.inputFasta = false;
     if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
       if (c.infile.string() == "all") c.computeAll = true;
       else c.geneset.insert(c.infile.string());
     } else {
-      std::ifstream geneFile(c.infile.string().c_str(), std::ifstream::in);
-      if (geneFile.is_open()) {
-        while (geneFile.good()) {
-          std::string gline;
-          getline(geneFile, gline);
-          typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
-          boost::char_separator<char> sep(" \t,;");
-          Tokenizer tokens(gline, sep);
-          Tokenizer::iterator tokIter = tokens.begin();
-          if (tokIter!=tokens.end()) {
-            std::string geneName=*tokIter++;
-	    c.geneset.insert(geneName);
+      // FASTA or list of gene names?
+      if (is_fasta(c.infile)) c.inputFasta = true;
+      else {
+	std::ifstream geneFile(c.infile.string().c_str(), std::ifstream::in);
+	if (geneFile.is_open()) {
+	  while (geneFile.good()) {
+	    std::string gline;
+	    getline(geneFile, gline);
+	    typedef boost::tokenizer< boost::char_separator<char> > Tokenizer;
+	    boost::char_separator<char> sep(" \t,;");
+	    Tokenizer tokens(gline, sep);
+	    Tokenizer::iterator tokIter = tokens.begin();
+	    if (tokIter!=tokens.end()) {
+	      std::string geneName=*tokIter++;
+	      c.geneset.insert(geneName);
+	    }
 	  }
+	  geneFile.close();
 	}
-	geneFile.close();
+      }
+    }
+
+    // Fill genome map
+    if (c.nchr.empty()) {
+      if (c.inputFasta) {
+	faidx_t* fai = fai_load(c.infile.string().c_str());
+	c.chrname.resize(faidx_nseq(fai));
+	for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
+	  std::string chrName = faidx_iseq(fai, refIndex);
+	  //std::cerr << chrName << ',' << refIndex << std::endl;
+	  c.nchr.insert(std::make_pair(chrName, refIndex));
+	  c.chrname[refIndex] = chrName;
+	}
+	fai_destroy(fai);
+      } else {
+	faidx_t* fai = fai_load(c.genome.string().c_str());
+	c.chrname.resize(faidx_nseq(fai));
+	for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
+	  std::string chrName = faidx_iseq(fai, refIndex);
+	  //std::cerr << chrName << ',' << refIndex << std::endl;
+	  c.nchr.insert(std::make_pair(chrName, refIndex));
+	  c.chrname[refIndex] = chrName;
+	}
+	fai_destroy(fai);
       }
     }
     
@@ -646,7 +685,7 @@ namespace dicey
     std::cout << "dicey ";
     for(int i=0; i<argc; ++i) { std::cout << argv[i] << ' '; }
     std::cout << std::endl;
-
+    
     return runPadlock(c);
   }
     

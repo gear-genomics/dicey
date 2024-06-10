@@ -256,6 +256,20 @@ namespace dicey {
     return geneInfo.size();
   }
 
+  template<typename TConfig, typename TGenomicRegions>
+  inline int32_t
+  parseFastaSeqs(TConfig const& c, TGenomicRegions& gRegions, std::vector<GeneInfo>& geneInfo) {
+    faidx_t* fai = fai_load(c.infile.string().c_str());
+    int32_t runningId = 0;
+    for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
+      std::string chrName = faidx_iseq(fai, refIndex);
+      gRegions[refIndex].push_back(IntervalLabel(0, faidx_seq_len(fai, chrName.c_str()) + 1, '+', runningId++));
+      geneInfo.push_back(GeneInfo(true, chrName, chrName));
+    }
+    fai_destroy(fai);
+    return geneInfo.size();
+  }
+  
 }
 
 #endif

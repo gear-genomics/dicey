@@ -30,6 +30,27 @@ namespace dicey
     else return false;
   }
 
+  inline bool is_fasta(boost::filesystem::path const& f) {
+    std::ifstream faFile;
+    boost::iostreams::filtering_streambuf<boost::iostreams::input> dataIn;
+    if (is_gz(f)) {
+      faFile.open(f.string().c_str(), std::ios_base::in | std::ios_base::binary);
+      dataIn.push(boost::iostreams::gzip_decompressor(), 16*1024);
+    } else faFile.open(f.string().c_str(), std::ios_base::in);
+    dataIn.push(faFile);
+    std::istream instream(&dataIn);
+    std::string line;
+    bool faIn = false;
+    while(std::getline(instream, line)) {
+      if ((!line.empty()) && (line[0] == '>')) faIn = true;
+      break;
+    }
+    dataIn.pop();
+    if (is_gz(f)) dataIn.pop();
+    faFile.close();
+    return faIn;
+  }
+
   inline char
   complement(char n) {
     switch(n) {
