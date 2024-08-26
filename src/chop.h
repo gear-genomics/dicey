@@ -17,7 +17,6 @@
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/progress.hpp>
 
 #ifdef OPENMP
 #include <omp.h>
@@ -345,7 +344,6 @@ namespace dicey
       
 	boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
 	std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Chop reference" << std::endl;
-	boost::progress_display show_progress( nchr );
 
 	uint32_t index = 0;
 	boost::iostreams::filtering_ostream of1;
@@ -355,8 +353,6 @@ namespace dicey
 	  of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
 	}
 	for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
-	  ++show_progress;
-
 	  // Load chromosome
 	  std::string seqname(faidx_iseq(fai, refIndex));
 	  int32_t sql = faidx_seq_len(fai, seqname.c_str());
@@ -416,7 +412,6 @@ namespace dicey
       
       boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
       std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Chop reference" << std::endl;
-      boost::progress_display show_progress( nchr );
 
       uint32_t index = 0;
       boost::iostreams::filtering_ostream of1;
@@ -432,7 +427,6 @@ namespace dicey
 	of2.push(boost::iostreams::file_sink(read2fq.c_str(), std::ios_base::out | std::ios_base::binary));
       }
       for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
-	++show_progress;
 
 	// Load chromosome
 	std::string seqname(faidx_iseq(fai, refIndex));

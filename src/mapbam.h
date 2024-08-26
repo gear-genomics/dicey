@@ -23,7 +23,6 @@
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/progress.hpp>
 
 #ifdef OPENMP
 #include <omp.h>
@@ -107,10 +106,8 @@ namespace dicey
     
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Mappability" << std::endl;
-    boost::progress_display show_progress( hdr->n_targets );
     // Iterate chromosomes
     for(uint32_t refIndex = 0; refIndex < (uint32_t) hdr->n_targets; ++refIndex) {
-      ++show_progress;
       if ((c.hasChr) && (std::string(hdr->target_name[refIndex]) != c.chrom)) continue;
       if (chrNoData(c, refIndex, idx)) continue;
 

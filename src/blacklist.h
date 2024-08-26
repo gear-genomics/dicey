@@ -18,7 +18,6 @@
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/progress.hpp>
 
 #ifdef OPENMP
 #include <omp.h>
@@ -110,10 +109,7 @@ namespace dicey
     
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Blacklist mappability map" << std::endl;
-    boost::progress_display show_progress( nchr );
     for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
-      ++show_progress;
-
       // Load chromosome
       std::string seqname(faidx_iseq(fai, refIndex));
       int32_t sql = faidx_seq_len(fai, seqname.c_str());

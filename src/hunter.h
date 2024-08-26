@@ -22,7 +22,6 @@
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/progress.hpp>
 
 #include <nlohmann/json.hpp>
 
