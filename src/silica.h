@@ -74,16 +74,13 @@ namespace dicey
     double temp;
     double perfTemp;
     std::string genome;
+
+    bool operator<(const PrimerBind& b) const {
+      return (temp > b.temp);
+    }
+
   };
   
-  template<typename TRecord>
-    struct SortPrimer : public std::binary_function<TRecord, TRecord, bool>
-    {
-      inline bool operator()(TRecord const& a, TRecord const& b) const {
-	return (a.temp > b.temp);
-      }
-    };
-
   struct PcrProduct {
     uint32_t refIndex;
     uint32_t leng;
@@ -94,16 +91,12 @@ namespace dicey
     double forTemp;
     double revTemp;
     double penalty;
+
+    bool operator<(const PcrProduct& b) const {
+      return (penalty < b.penalty);
+    }
   };
   
-  template<typename TRecord>
-    struct SortProducts : public std::binary_function<TRecord, TRecord, bool>
-    {
-      inline bool operator()(TRecord const& a, TRecord const& b) const {
-	return (a.penalty < b.penalty);
-      }
-    };
-
   template<typename TConfig, typename TStream>
   inline void
   writeJsonPrimerOut(TConfig const& c, TStream& rcfile, std::vector<std::string> const& qn, std::vector<PrimerBind> const& allp, std::vector<PcrProduct> const& pcrColl, std::vector<std::string> const& pName, std::vector<std::string> const& pSeq, std::vector<std::string> const& msg) {
@@ -588,7 +581,7 @@ namespace dicey
     }
     
     // Sort by temperature
-    std::sort(allp.begin(), allp.end(), SortPrimer<PrimerBind>());
+    std::sort(allp.begin(), allp.end());
     
     // Search PCR amplicons
     if (c.pruneprimer) jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
@@ -622,7 +615,7 @@ namespace dicey
       }
       
       // Sort by penalty
-      std::sort(pcrColl.begin(), pcrColl.end(), SortProducts<PcrProduct>());
+      std::sort(pcrColl.begin(), pcrColl.end());
       
       // Output amplicons
       jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);

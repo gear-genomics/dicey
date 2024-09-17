@@ -58,12 +58,9 @@ namespace dicey
     std::string queryalign;
     
     DnaHit(int32_t sc, uint32_t const refIndex, uint32_t const s, char const orient, std::string const& ra, std::string const& qa) : score(sc), chr(refIndex), start(s), strand(orient), refalign(ra), queryalign(qa) {}
-  };
 
-  template<typename TRecord>
-  struct SortDnaHit : public std::binary_function<TRecord, TRecord, bool> {
-    inline bool operator()(TRecord const& a, TRecord const& b) const {
-      return ((a.score > b.score) || ((a.score == b.score) && (a.chr < b.chr)) || ((a.score == b.score) && (a.chr == b.chr) && (a.start < b.start)));
+    bool operator<(const DnaHit& b) const {
+      return ((score > b.score) || ((score == b.score) && (chr < b.chr)) || ((score == b.score) && (chr == b.chr) && (start < b.start)));
     }
   };
 
@@ -393,7 +390,7 @@ namespace dicey
     }
     
     // Sort
-    std::sort(ht.begin(), ht.end(), SortDnaHit<DnaHit>());
+    std::sort(ht.begin(), ht.end());
 
     // Output
     jsonDnaHitOut(c, seqname, ht, msg);
