@@ -1976,8 +1976,8 @@ fillMatrix2(int maxLoop)
 static int 
 symmetry_thermo(const unsigned char* seq)
 {
-   register char s;
-   register char e;
+   char s;
+   char e;
    const unsigned char *seq_end=seq;
    int i = 0;
    int seq_len=length_unsig_char(seq);
