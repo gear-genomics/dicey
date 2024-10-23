@@ -40,6 +40,7 @@ namespace dicey
     bool dumphash;
     uint32_t readlength;
     uint32_t isize;
+    uint32_t jump;
     uint32_t nTmpFile;
     boost::filesystem::path genome;
     std::string fq1;
@@ -53,7 +54,7 @@ namespace dicey
     std::string rcseq(seq);
     reverseComplement(rcseq);
     uint32_t seqlen = seq.size();
-    for(uint32_t pos = 0; ((pos + c.readlength) <= seqlen); ++pos) {
+    for(uint32_t pos = 0; ((pos + c.readlength) <= seqlen); pos+=c.jump) {
       if (nContent(seq.substr(pos, c.readlength))) continue;
       unsigned h1 = hash_string(seq.substr(pos, c.readlength).c_str());
       unsigned h2 = hash_string(rcseq.substr(seqlen - c.readlength - pos, c.readlength).c_str());
@@ -88,6 +89,7 @@ namespace dicey
       ("fq2,g", boost::program_options::value<std::string>(&c.fq2)->default_value("read2"), "read2 output prefix")
       ("length,l", boost::program_options::value<uint32_t>(&c.readlength)->default_value(101), "read length")
       ("insertsize,i", boost::program_options::value<uint32_t>(&c.isize)->default_value(501), "insert size")
+      ("jump,j", boost::program_options::value<uint32_t>(&c.jump)->default_value(1), "chop offset")
       ("se,s", "generate single-end data")
       ("chromosome,c", "generate reads by chromosome")
       ("revcomp,r", "reverse complement all reads")
@@ -370,7 +372,7 @@ namespace dicey
 	    }
 	  
 	    // Iterate chr
-	    for(int32_t pos = 0; ((pos + (int32_t) c.readlength) <= sql); ++pos, ++index) {
+	    for(int32_t pos = 0; ((pos + (int32_t) c.readlength) <= sql); pos+=c.jump, ++index) {
 	      std::string read1 = boost::to_upper_copy(std::string(seq + pos, seq + pos + c.readlength));
 	      if (nContent(read1)) continue;
 	      if (c.revcomp) reverseComplement(read1);
@@ -452,7 +454,7 @@ namespace dicey
 	  }
 	  
 	  // Iterate chr
-	  for(int32_t pos = halfwin; pos < sql - halfwin; ++pos, ++index) {
+	  for(int32_t pos = halfwin; pos < sql - halfwin; pos+=c.jump, ++index) {
 	    std::string read1 = boost::to_upper_copy(std::string(seq + pos - halfwin, seq + pos - halfwin + c.readlength));
 	    if (nContent(read1)) continue;
 	    if (c.revcomp) reverseComplement(read1);
