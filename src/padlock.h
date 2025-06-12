@@ -48,11 +48,14 @@ namespace dicey
     bool absent;
     uint32_t distance;
     uint32_t armlen;
+    uint32_t tmdiff;
     double temp;
     double mv;
     double dv;
     double dna_conc;
     double dntp;
+    double mingcth;
+    double maxgcth;
     std::string ucscDB;
     std::string anchor;
     std::string spacerleft;
@@ -150,9 +153,9 @@ namespace dicey
     if ((c.inputFasta) && (c.absent)) maxNeighborHits = 0;
     uint32_t expSeqHits = 1; // Only actual arm gives a hit
     if ((c.inputFasta) && (c.absent)) expSeqHits = 0; // FASTA seq. input not part of reference
-    double armTMDiff = 2;
-    double minGC = 0.4;
-    double maxGC = 0.6;
+    double armTMDiff = c.tmdiff;
+    double minGC = c.mingcth;
+    double maxGC = c.maxgcth;
     
     // Initialize thal arguments
     if ((!boost::filesystem::exists(c.primer3Config)) || (!boost::filesystem::is_directory(c.primer3Config))) {
@@ -554,6 +557,9 @@ namespace dicey
       ("barcodes,b", boost::program_options::value<boost::filesystem::path>(&c.barcodes), "FASTA barcode file")
       ("distance,d", boost::program_options::value<uint32_t>(&c.distance)->default_value(1), "neighborhood distance")
       ("armlen,m", boost::program_options::value<uint32_t>(&c.armlen)->default_value(20), "probe arm length")
+      ("tmdiff,z", boost::program_options::value<uint32_t>(&c.tmdiff)->default_value(2), "Tm difference between arms")
+      ("gcmin", boost::program_options::value<double>(&c.mingcth)->default_value(0.4), "minimum arm GC fraction")
+      ("gcmax", boost::program_options::value<double>(&c.maxgcth)->default_value(0.6), "maximum arm GC fraction")
       ("attribute,u", boost::program_options::value<std::string>(&c.idname)->default_value("gene_id"), "gtf/gff3 attribute")
       ("feature,f", boost::program_options::value<std::string>(&c.feature)->default_value("exon"), "gtf/gff3 feature")
       ("probe,p", "apply distance to entire probe, i.e., only one arm needs to be unique")
