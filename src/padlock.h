@@ -205,7 +205,8 @@ namespace dicey
       for(uint32_t i = 0; i < geneInfo.size(); ++i) gtfSet.insert(geneInfo[i].id);
       for(typename PadlockConfig::TGeneSet::const_iterator it = c.geneset.begin(); it != c.geneset.end(); ++it) {
 	if (gtfSet.find(*it) == gtfSet.end()) {
-	  return errorMessage(c, "Error: Gene/transcript name does not exist in GTF file or the transcript biotype is not protein coding: " + (*it));
+	  std::cerr << ("Error: Gene/transcript name does not exist in GTF file or the transcript biotype is not protein coding: " + (*it)) << std::endl;
+	  return 1;
 	}
       }
     }
@@ -521,28 +522,6 @@ namespace dicey
     return 0;
   }
 
-  inline int
-  errorMessage(PadlockConfig const& c, std::string const& errmsg) {
-    if (c.json) {
-      boost::iostreams::filtering_ostream rcfile;
-      rcfile.push(boost::iostreams::gzip_compressor());
-      rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
-      rcfile << "{";
-      rcfile << "\"errors\": [";
-      nlohmann::json err;
-      err["type"] = "error";
-      err["title"] = errmsg;
-      rcfile << err.dump();
-      rcfile << "]}";
-      rcfile.pop();
-      rcfile.pop();
-    } else {
-      std::cerr << errmsg << std::endl;
-    }
-    return 1;
-  }
-  
-
   int padlock(int argc, char** argv) {
     PadlockConfig c;
     
@@ -628,18 +607,21 @@ namespace dicey
 
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
-      return errorMessage(c, "Error: Genome does not exist!");
+      std::cerr << "Error: Genome does not exist!" << std::endl;
+      return 1;
     }
     guessUcscDb(c);
 
     // Check GTF file
     if (!(boost::filesystem::exists(c.gtfFile) && boost::filesystem::is_regular_file(c.gtfFile) && boost::filesystem::file_size(c.gtfFile))) {
-      return errorMessage(c, "Error: GTF file does not exist!");
+      std::cerr << "Error: GTF file does not exist!" << std::endl;
+      return 1;
     }
 
     // Check barcodes file
     if (!(boost::filesystem::exists(c.barcodes) && boost::filesystem::is_regular_file(c.barcodes) && boost::filesystem::file_size(c.barcodes))) {
-      return errorMessage(c, "Error: Barcode FASTA file does not exist!");
+      std::cerr << "Error: Barcode FASTA file does not exist!" << std::endl;
+      return 1;
     }
 
     // Check gene list
