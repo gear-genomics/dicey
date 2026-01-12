@@ -39,6 +39,8 @@ namespace dicey
 {
 
   struct PadlockConfig {
+    typedef std::set<std::string> TGeneSet;
+    
     bool json;
     bool indel;
     bool armMode;
@@ -62,7 +64,7 @@ namespace dicey
     std::string spacerright;
     std::string feature;
     std::string idname;
-    std::set<std::string> geneset;
+    TGeneSet geneset;
     std::vector<std::string> chrname;
     std::map<std::string, int32_t> nchr;
     boost::filesystem::path gtfFile;
@@ -197,6 +199,15 @@ namespace dicey
     } else {
       // Gene list
       parseGTF(c, gRegions, geneInfo);
+
+      // Check all genes have been found
+      typename PadlockConfig::TGeneSet gtfSet;
+      for(uint32_t i = 0; i < geneInfo.size(); ++i) gtfSet.insert(geneInfo[i].id);
+      for(typename PadlockConfig::TGeneSet::const_iterator it = c.geneset.begin(); it != c.geneset.end(); ++it) {
+	if (gtfSet.find(*it) == gtfSet.end()) {
+	  return errorMessage(c, "Error: Gene/transcript name does not exist in GTF file or the transcript biotype is not protein coding: " + (*it));
+	}
+      }
     }
 
     // Load barcodes
