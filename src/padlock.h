@@ -271,7 +271,7 @@ namespace dicey
     bool firstRec = true;
     if (c.json) {
       rcfile.push(boost::iostreams::gzip_compressor());
-      rcfile.push(boost::iostreams::file_sink(c.jsonfile.c_str(), std::ios_base::out | std::ios_base::binary));
+      rcfile.push(boost::iostreams::file_sink(c.jsonfile.string(), std::ios_base::out | std::ios_base::binary));
       rcfile << "{";
       rcfile << "\"errors\": [],";
       // Meta information

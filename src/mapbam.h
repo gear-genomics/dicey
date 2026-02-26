@@ -102,7 +102,7 @@ namespace dicey
     // Outfile
     boost::iostreams::filtering_ostream of;
     of.push(boost::iostreams::gzip_compressor());
-    of.push(boost::iostreams::file_sink(c.outfile.string().c_str(), std::ios_base::out | std::ios_base::binary));
+    of.push(boost::iostreams::file_sink(c.outfile.string(), std::ios_base::out | std::ios_base::binary));
     
     boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
     std::cout << '[' << boost::posix_time::to_simple_string(now) << "] " << "Mappability" << std::endl;

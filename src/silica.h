@@ -193,7 +193,7 @@ namespace dicey
       // Output file
       boost::iostreams::filtering_ostream rcfile;
       rcfile.push(boost::iostreams::gzip_compressor());
-      rcfile.push(boost::iostreams::file_sink(c.outfile.c_str(), std::ios_base::out | std::ios_base::binary));
+      rcfile.push(boost::iostreams::file_sink(c.outfile.string(), std::ios_base::out | std::ios_base::binary));
       writeJsonPrimerOut(c, rcfile, seqname, allp, pcrColl, pName, pSeq, msg);
       rcfile.pop();
     } else {

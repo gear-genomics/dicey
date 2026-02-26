@@ -89,7 +89,7 @@ namespace dicey
     // Outfile
     boost::iostreams::filtering_ostream of;
     of.push(boost::iostreams::gzip_compressor());
-    of.push(boost::iostreams::file_sink(c.outfile.string().c_str(), std::ios_base::out | std::ios_base::binary));
+    of.push(boost::iostreams::file_sink(c.outfile.string(), std::ios_base::out | std::ios_base::binary));
 
     // Get chromosomes
     faidx_t* fai = fai_load(c.map.string().c_str());

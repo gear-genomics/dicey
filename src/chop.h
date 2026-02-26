@@ -166,7 +166,7 @@ namespace dicey
 	for(uint32_t i = 0; i < c.nTmpFile; ++i) {
 	  std::string read1fq = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".hashes.gz";
 	  ofAll[i].push(boost::iostreams::gzip_compressor());
-	  ofAll[i].push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	  ofAll[i].push(boost::iostreams::file_sink(read1fq, std::ios_base::out | std::ios_base::binary));
 	}
 
 	// Fasta input (gzipped)
@@ -250,7 +250,7 @@ namespace dicey
 	  boost::iostreams::filtering_ostream ofSort;
 	  std::string read1sort = c.fq1 + "." + boost::lexical_cast<std::string>(i) + ".sort.gz";
 	  ofSort.push(boost::iostreams::gzip_compressor());
-	  ofSort.push(boost::iostreams::file_sink(read1sort.c_str(), std::ios_base::out | std::ios_base::binary));
+	  ofSort.push(boost::iostreams::file_sink(read1sort, std::ios_base::out | std::ios_base::binary));
 	  for(uint32_t j = 0; j < hashVec.size(); ++j) {
 	    ofSort << hashVec[j].first << '\t' << hashVec[j].second << std::endl;
 	  }
@@ -264,7 +264,7 @@ namespace dicey
 	boost::iostreams::filtering_ostream dataOut;
 	std::string read1fq = c.fq1 + ".hashes.gz";
 	dataOut.push(boost::iostreams::gzip_compressor());
-	dataOut.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	dataOut.push(boost::iostreams::file_sink(read1fq, std::ios_base::out | std::ios_base::binary));
 	
 	// Merge sorted chunks
 	std::vector<std::ifstream> ifData(c.nTmpFile);
@@ -352,7 +352,7 @@ namespace dicey
 	if (c.sf) {
 	  std::string read1fq = c.fq1 + ".fq.gz";
 	  of1.push(boost::iostreams::gzip_compressor());
-	  of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	  of1.push(boost::iostreams::file_sink(read1fq, std::ios_base::out | std::ios_base::binary));
 	}
 	for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
 	  // Load chromosome
@@ -368,7 +368,7 @@ namespace dicey
 	    if (!c.sf) {
 	      std::string read1fq = c.fq1 + "." + seqname + ".fq.gz";
 	      of1.push(boost::iostreams::gzip_compressor());
-	      of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	      of1.push(boost::iostreams::file_sink(read1fq, std::ios_base::out | std::ios_base::binary));
 	    }
 	  
 	    // Iterate chr
@@ -420,13 +420,13 @@ namespace dicey
       if (c.sf) {
 	std::string read1fq = c.fq1 + ".fq.gz";
 	of1.push(boost::iostreams::gzip_compressor());
-	of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	of1.push(boost::iostreams::file_sink(read1fq, std::ios_base::out | std::ios_base::binary));
       }
       boost::iostreams::filtering_ostream of2;
       if (c.sf) {
 	std::string read2fq = c.fq2 + ".fq.gz";
 	of2.push(boost::iostreams::gzip_compressor());
-	of2.push(boost::iostreams::file_sink(read2fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	of2.push(boost::iostreams::file_sink(read2fq, std::ios_base::out | std::ios_base::binary));
       }
       for(uint32_t refIndex = 0; refIndex < nchr; ++refIndex) {
 
@@ -443,14 +443,14 @@ namespace dicey
 	  if (!c.sf) {
 	    std::string read1fq = c.fq1 + "." + seqname + ".fq.gz";
 	    of1.push(boost::iostreams::gzip_compressor());
-	    of1.push(boost::iostreams::file_sink(read1fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	    of1.push(boost::iostreams::file_sink(read1fq, std::ios_base::out | std::ios_base::binary));
 	  }
 	  
 	  // FQ2
 	  if (!c.sf) {
 	    std::string read2fq = c.fq2 + "." + seqname + ".fq.gz";
 	    of2.push(boost::iostreams::gzip_compressor());
-	    of2.push(boost::iostreams::file_sink(read2fq.c_str(), std::ios_base::out | std::ios_base::binary));
+	    of2.push(boost::iostreams::file_sink(read2fq, std::ios_base::out | std::ios_base::binary));
 	  }
 	  
 	  // Iterate chr
