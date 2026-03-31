@@ -323,13 +323,6 @@ namespace dicey
     a.dna_conc = c.dna_conc;
     a.dntp = c.dntp;
     
-    // Set prefix and suffix based on edit distance
-    c.pre_context = 0;
-    c.post_context = 0;
-    if (c.indel) {
-      c.pre_context += c.distance;
-      c.post_context += c.distance;
-    }
     
     // Fix provided Temperature
     a.temp += primer3thal::ABSOLUTE_ZERO;
@@ -419,6 +412,14 @@ namespace dicey
     typedef std::set<char> TAlphabet;
     char tmp[] = {'A', 'C', 'G', 'T'};
     TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
+
+    // Set prefix and suffix context based on (possibly adjusted) edit distance
+    c.pre_context = 0;
+    c.post_context = 0;
+    if (c.indel) {
+      c.pre_context += c.distance;
+      c.post_context += c.distance;
+    }
     
     // Query FM-Index
     typedef std::vector<TPrimerBinds> TChrPrimerBinds;
@@ -496,7 +497,7 @@ namespace dicey
 	      
 	      // Thermodynamic calculation
 	      std::string genomicseq = pre + s.substr(0, m) + post;
-	      if (pre.size() < chrpos) chrpos -= pre.size();	      
+	      if (pre.size() <= chrpos) chrpos -= pre.size();	      
 	      std::string primer = revQuery;
 	      std::string searchSeq = sequence;
 	      if (fwrvidx) {
@@ -534,8 +535,9 @@ namespace dicey
 
 		  // Genomic subsequence
 		  if (fwrvidx) {
+		    uint32_t alignshift = alignpos - chrpos;
 		    chrpos = alignpos;
-		    genomicseq = genomicseq.substr(alignpos - chrpos + 1, primer.size());
+		    genomicseq = genomicseq.substr(alignshift, primer.size());
 		  } else {
 		    uint32_t alignshift = alignpos - chrpos;
 		    chrpos = alignpos - koffset;
@@ -589,7 +591,7 @@ namespace dicey
       for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
 	for(TPrimerBinds::iterator fw = forBind[refIndex].begin(); fw != forBind[refIndex].end(); ++fw) {
 	  for(TPrimerBinds::iterator rv = revBind[refIndex].begin(); rv != revBind[refIndex].end(); ++rv) {
-	    if ((rv->pos > fw->pos) && (rv->pos - fw->pos < c.maxProdSize)) {
+	    if ((rv->pos > fw->pos) && (rv->pos + pSeq[rv->primerId].size() - fw->pos <= c.maxProdSize)) {
 	      PcrProduct pcrProd;
 	      pcrProd.refIndex = refIndex;
 	      pcrProd.forPos = fw->pos;
