@@ -71,8 +71,7 @@ With these files, you can then design padlock probes for a given gene using
 
 ## Graphical user interface
 
-You can search primers interactively using our web application [silica](https://www.gear-genomics.com/silica/).
-
+You can search primers interactively using our web application [silica](https://www.gear-genomics.com/silica/). The padlock probe design also has a companion web application called [padlock](https://www.gear-genomics.com/padlock/). Both tools are hosted on [www.gear-genomics.com](https://www.gear-genomics.com/).
 
 ## FAQ
 
