@@ -19,6 +19,9 @@ for line in fileinput.input():
         subcommand = meta.get('subcommand')
         # dicey hunt
         if subcommand == "hunt":
+            name = meta.get('name')
+            if name is not None:
+                print("# ", name, " (", meta.get('sequence'), ")", sep="")
             for hit in df.get('data', []):
                 print(">", hit.get('chr'), ":", hit.get('start'), "-", hit.get('end'), " (Strand: ", hit.get('strand'), ", Distance: ", hit.get('distance'), ")", sep="")
                 print(hit.get('queryalign', ''))
