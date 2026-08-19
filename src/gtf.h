@@ -10,6 +10,7 @@
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/icl/interval_set.hpp>
 
 #include <htslib/sam.h>
 

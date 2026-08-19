@@ -12,11 +12,8 @@
 #include "bed.h"
 #include "version.h"
 #include "index.h"
-#include "blacklist.h"
-#include "chop.h"
 #include "hunter.h"
 #include "silica.h"
-#include "mapbam.h"
 #include "padlock.h"
 
 using namespace dicey;
@@ -31,13 +28,6 @@ displayUsage() {
   std::cout << "    hunt         search DNA sequences" << std::endl;
   std::cout << "    search       in-silico PCR" << std::endl;
   std::cout << "    padlock      padlock probe design" << std::endl;
-  std::cout << std::endl;
-  std::cout << std::endl;
-  std::cout << "Mappability:" << std::endl;
-  std::cout << std::endl;
-  std::cout << "    chop         chop reference into paired-end / single-end reads" << std::endl;
-  std::cout << "    mappability2 parse BAM from mapped chopped reads (requires chop + map before)" << std::endl;
-  std::cout << "    blacklist    blacklist certain regions in mappability map" << std::endl;
   std::cout << std::endl;
   std::cout << std::endl;
 }
@@ -79,15 +69,6 @@ int main(int argc, char **argv) {
   }
   else if ((std::string(argv[1]) == "search")) {
     return silica(argc-1,argv+1);
-  }
-  else if ((std::string(argv[1]) == "mappability2")) {
-    return mapbam(argc-1,argv+1);
-  }
-  else if ((std::string(argv[1]) == "chop")) {
-    return chop(argc-1,argv+1);
-  }
-  else if ((std::string(argv[1]) == "blacklist")) {
-    return blacklist(argc-1,argv+1);
   } else {
     std::cerr << "Unrecognized command " << std::string(argv[1]) << std::endl;
     return 1;
