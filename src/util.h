@@ -54,14 +54,38 @@ namespace dicey
   inline char
   complement(char n) {
     switch(n) {
-    case 'A':
-      return 'T';
-    case 'T':
-      return 'A';
-    case 'G':
-      return 'C';
-    case 'C':
-      return 'G';
+    case 'A': return 'T';
+    case 'a': return 't';
+    case 'C': return 'G';
+    case 'c': return 'g';
+    case 'G': return 'C';
+    case 'g': return 'c';
+    case 'T': return 'A';
+    case 't': return 'a';
+    case 'U': return 'A';
+    case 'u': return 'a';
+    case 'R': return 'Y';
+    case 'r': return 'y';
+    case 'Y': return 'R';
+    case 'y': return 'r';
+    case 'S': return 'S';
+    case 's': return 's';
+    case 'W': return 'W';
+    case 'w': return 'w';
+    case 'K': return 'M';
+    case 'k': return 'm';
+    case 'M': return 'K';
+    case 'm': return 'k';
+    case 'B': return 'V';
+    case 'b': return 'v';
+    case 'V': return 'B';
+    case 'v': return 'b';
+    case 'D': return 'H';
+    case 'd': return 'h';
+    case 'H': return 'D';
+    case 'h': return 'd';
+    case 'N': return 'N';
+    case 'n': return 'n';
     }
     return 'N';
   }
@@ -74,28 +98,19 @@ namespace dicey
 
   inline double
   gccontent(std::string& nucs) {
+    if (nucs.empty()) return -1;
     uint32_t gc = 0;
     for(std::string::iterator it = nucs.begin(); it != nucs.end(); ++it) {
-      if (*it == 'N') return -1;
-      else if ((*it == 'C') || (*it == 'G')) ++gc;
+      if ((*it == 'N') || (*it == 'n')) return -1;
+      else if ((*it == 'C') || (*it == 'G') || (*it == 'c') || (*it == 'g')) ++gc;
     }
     return (double) gc / (double) nucs.size();
   }
   
   inline void
   reverseComplement(std::string& sequence) {
-    std::string rev = boost::to_upper_copy(std::string(sequence.rbegin(), sequence.rend()));
-    std::size_t i = 0;
-    for(std::string::iterator revIt = rev.begin(); revIt != rev.end(); ++revIt, ++i) {
-      switch (*revIt) {
-      case 'A': sequence[i]='T'; break;
-      case 'C': sequence[i]='G'; break;
-      case 'G': sequence[i]='C'; break;
-      case 'T': sequence[i]='A'; break;
-      case 'N': sequence[i]='N'; break;
-      default: break;
-      }
-    }
+    boost::to_upper(sequence);
+    revcomplement(sequence);
   }
   
   inline bool

@@ -251,6 +251,9 @@ namespace dicey
       if (is_gz(c.barcodes)) dataIn.pop();
       barFile.close();
     }
+    if (numBarcodes < geneInfo.size()) {
+      std::cerr << "Warning: only " << numBarcodes << " barcodes available for " << geneInfo.size() << " genes!" << std::endl;
+    }
 
     // Reference index
     csa_wt<> fm_index;  
@@ -308,8 +311,13 @@ namespace dicey
     uint32_t targetlen = 2 * c.armlen;
     for(uint32_t refIndex = 0; refIndex < c.nchr.size(); ++refIndex) {
       for(uint32_t i = 0; i < gRegions[refIndex].size(); ++i) {
-	int32_t seqlen;
-	char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end, &seqlen);
+	int32_t seqlen = -1;
+	char* seq = faidx_fetch_seq(fai, c.chrname[refIndex].c_str(), gRegions[refIndex][i].start, gRegions[refIndex][i].end - 1, &seqlen);
+	if ((seq == NULL) || (seqlen < 0)) {
+	  std::cerr << "Warning: Could not fetch sequence for " << c.chrname[refIndex] << ":" << gRegions[refIndex][i].start + 1 << "-" << gRegions[refIndex][i].end << "!" << std::endl;
+	  if (seq != NULL) free(seq);
+	  continue;
+	}
 	std::string exonseq = boost::to_upper_copy(std::string(seq));
 	if (gRegions[refIndex][i].strand == '-') revcomplement(exonseq);
 	uint32_t exonlen = exonseq.size();
@@ -331,7 +339,7 @@ namespace dicey
 	      return 1;
 	    }
 	    double arm1TM = oiarm1.temp;
-	    double armTMMax = 93 + arm1GC - 675 / c.armlen;  // ideal 81.5 instead of 93
+	    double armTMMax = 93 + arm1GC - 675.0 / c.armlen;  // ideal 81.5 instead of 93
 	    if (arm1TM > armTMMax) continue;
 	    
 	    // Arm2
@@ -348,7 +356,7 @@ namespace dicey
 	      return 1;
 	    }
 	    double arm2TM = oiarm2.temp;
-	    armTMMax = 93 + arm2GC - 675 / c.armlen;
+	    armTMMax = 93 + arm2GC - 675.0 / c.armlen;
 	    if ((arm2TM > armTMMax) || (std::abs(arm1TM - arm2TM) > armTMDiff)) continue;
 	    
 	    // Probe
@@ -360,12 +368,12 @@ namespace dicey
 	    primer3thal::oligo2 = (unsigned char*) rprobe.c_str();
 	    primer3thal::thal_results oiprobe;
 	    bool thalsuccess3 = primer3thal::thal(primer3thal::oligo1, primer3thal::oligo2, &a, &oiprobe);
-	    if ((!thalsuccess3) || (oiarm2.temp == primer3thal::THAL_ERROR_SCORE)) {
+	    if ((!thalsuccess3) || (oiprobe.temp == primer3thal::THAL_ERROR_SCORE)) {
 	      std::cerr << "Error: Thermodynamical calculation failed!" << std::endl;
 	      return 1;
 	    }
 	    double probeTM = oiprobe.temp;
-	    double probeTMMin = 81.5 + probeGC - 675 / (2 * c.armlen);
+	    double probeTMMin = 81.5 + probeGC - 675.0 / (2 * c.armlen);
 	    double probeTMMax = probeTMMin + 10;    
 	    if ((probeTM < probeTMMin) || (probeTM > probeTMMax)) continue;
 
@@ -441,7 +449,7 @@ namespace dicey
 	      
 	    // Output
 	    int32_t startpos = gRegions[refIndex][i].start + k + 1;
-	    if (gRegions[refIndex][i].strand == '-') startpos = gRegions[refIndex][i].end - k - targetlen + 2;
+	    if (gRegions[refIndex][i].strand == '-') startpos = gRegions[refIndex][i].end - k - targetlen + 1;
 	    ofile << geneInfo[gRegions[refIndex][i].lid].id << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].symbol << '\t';
 	    ofile << geneInfo[gRegions[refIndex][i].lid].code << '\t';	    
@@ -449,7 +457,7 @@ namespace dicey
 	    if (c.inputFasta) ofile << "n.a." << '\t';
 	    else ofile << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << '\t'; 
 	    ofile << gRegions[refIndex][i].strand << '\t';
-	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << '\t';
+	    ofile << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end << '\t';
 	    ofile << arm1 << '-' << arm2 << '\t';
 	    if (c.spacerleft.size()) ofile << c.spacerleft << '\t';
 	    else ofile << "n.a." << '\t';
@@ -473,7 +481,7 @@ namespace dicey
 	      if (c.inputFasta) rcfile << "\"n.a.\", ";
 	      else rcfile << "\"" << "https://genome.ucsc.edu/cgi-bin/hgTracks?db=" << c.ucscDB << "&position=" << c.chrname[refIndex] << ":" << startpos << "-" << startpos + targetlen - 1 << "\", ";
 	      rcfile << "\"" << gRegions[refIndex][i].strand << "\", ";
-	      rcfile << "\"" << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end + 1 << "\", ";
+	      rcfile << "\"" << c.chrname[refIndex] << ':' << gRegions[refIndex][i].start + 1 << '-' << gRegions[refIndex][i].end << "\", ";
 	      rcfile << "\"" << arm1 << '-' << arm2 << "\", ";
 	      if (c.spacerleft.size()) rcfile << "\"" << c.spacerleft << "\", ";
 	      else rcfile << "\"n.a.\", ";

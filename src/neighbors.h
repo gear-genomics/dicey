@@ -26,15 +26,18 @@ using namespace sdsl;
 
 namespace dicey {
 
-// Special insert function that makes sure strset has no superstrings
 template<typename TStrSet>
 inline void
-_insert(TStrSet& strset, std::string const& s) {
+_insert(TStrSet& strset, std::string const& s, bool indel) {
+  if (!indel) {
+    strset.insert(s);
+    return;
+  }
   bool insertS = true;
   for (typename TStrSet::iterator it = strset.begin(); it != strset.end(); ) {
-    if (it->find(s) != std::string::npos) strset.erase(it++); // s is a substring of *it, erase *it
+    if (it->find(s) != std::string::npos) strset.erase(it++);
     else {
-      if (s.find(*it) != std::string::npos) insertS = false; // *it is a substring of s, do not insert s
+      if (s.find(*it) != std::string::npos) insertS = false;
       ++it;
     }
   }
@@ -43,44 +46,39 @@ _insert(TStrSet& strset, std::string const& s) {
 
 template<typename TAlphabet, typename TStringSet>
 inline void
-_neighbors(std::string const& query, TAlphabet const& alphabet, int32_t const inputdist, int32_t dist, bool indel, int32_t pos, uint32_t maxsize, TStringSet& strset) {
-  if (strset.size() < maxsize) {
-    if (pos < (int32_t) query.size()) {
-      if (dist > 0) {
-	if (indel) {
-	  // Deletion
-	  std::string newst = query.substr(0, pos) + query.substr(pos + 1);
-	  _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos, maxsize, strset);
-	}
-      }
-      
-      // No change, move to next pos
-      _neighbors(query, alphabet, inputdist, dist, indel, pos+1, maxsize, strset);
-      
-      if (dist > 0) {
-	// Switch nucleotide
-	for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
-	  if (*ait != query[pos]) {
-	    std::string newst(query);
-	    newst[pos] = *ait;
-	    _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos+1, maxsize, strset);
-	  }
-	}
-	
-	if (indel) {    
-	  // Insertion
-	  for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
-	    std::string ins("N");
-	    ins[0] = *ait;
-	    std::string newst = query.substr(0, pos) + ins + query.substr(pos);
-	    _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos + 1, maxsize, strset);
-	  }
-	}
-      }
-    } else {
-      // Only insert true neighbors
-      if (dist < inputdist) _insert(strset, query);
+_neighbors(std::string& query, TAlphabet const& alphabet, int32_t const inputdist, int32_t dist, bool indel, int32_t pos, uint32_t maxsize, TStringSet& strset) {
+  if (strset.size() >= maxsize) return;
+  if (pos < (int32_t) query.size()) {
+    if ((dist > 0) && (indel)) {
+      // Deletion
+      std::string newst = query.substr(0, pos) + query.substr(pos + 1);
+      _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos, maxsize, strset);
     }
+
+    // No change
+    _neighbors(query, alphabet, inputdist, dist, indel, pos+1, maxsize, strset);
+
+    if (dist > 0) {
+      char orig = query[pos];
+      for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
+	if (*ait != orig) {
+	  query[pos] = *ait;
+	  _neighbors(query, alphabet, inputdist, dist - 1, indel, pos+1, maxsize, strset);
+	}
+      }
+      query[pos] = orig;
+
+      if (indel) {
+	// Insertion
+	for(typename TAlphabet::const_iterator ait = alphabet.begin(); ait != alphabet.end(); ++ait) {
+	  std::string newst = query.substr(0, pos) + std::string(1, *ait) + query.substr(pos);
+	  _neighbors(newst, alphabet, inputdist, dist - 1, indel, pos + 1, maxsize, strset);
+	}
+      }
+    }
+  } else {
+    // Only insert true neighbors
+    if (dist < inputdist) _insert(strset, query, indel);
   }
 }
 
@@ -88,8 +86,9 @@ _neighbors(std::string const& query, TAlphabet const& alphabet, int32_t const in
 template<typename TAlphabet, typename TStringSet>
 inline void
 neighbors(std::string const& query, TAlphabet const& alphabet, int32_t dist, bool indel, uint32_t maxsize, TStringSet& strset) {
-  _insert(strset, query);
-  _neighbors(query, alphabet, dist, dist, indel, 0, maxsize, strset);
+  std::string q(query);
+  _insert(strset, q, indel);
+  _neighbors(q, alphabet, dist, dist, indel, 0, maxsize, strset);
 }
 
 

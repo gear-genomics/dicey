@@ -114,10 +114,7 @@ namespace dicey {
       boost::char_separator<char> sep("\t");
       Tokenizer tokens(gline, sep);
       Tokenizer::iterator tokIter = tokens.begin();
-      if (tokIter==tokens.end()) {
-	std::cerr << "Empty line in GTF file!" << std::endl;
-	return 0;
-      }
+      if (tokIter==tokens.end()) continue;
       std::string chrName=*tokIter++;
       if (c.nchr.find(chrName) == c.nchr.end()) continue;
       int32_t chrid = c.nchr.find(chrName)->second;      
@@ -207,7 +204,7 @@ namespace dicey {
 		  std::cerr << "Feature start is greater than feature end!" << std::endl;
 		  return 0;
 		}
-		_insertInterval(overlappingRegions[chrid], start - 1, end - 1, strand, idval, eid++);
+		_insertInterval(overlappingRegions[chrid], start - 1, end, strand, idval, eid++);
 	      }
 	    }
 	  }
@@ -265,7 +262,7 @@ namespace dicey {
     int32_t runningId = 0;
     for(int32_t refIndex = 0; refIndex < faidx_nseq(fai); ++refIndex) {
       std::string chrName = faidx_iseq(fai, refIndex);
-      gRegions[refIndex].push_back(IntervalLabel(0, faidx_seq_len(fai, chrName.c_str()) + 1, '+', runningId++));
+      gRegions[refIndex].push_back(IntervalLabel(0, faidx_seq_len(fai, chrName.c_str()), '+', runningId++));
       geneInfo.push_back(GeneInfo(true, chrName, chrName));
     }
     fai_destroy(fai);

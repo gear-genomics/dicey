@@ -133,10 +133,12 @@ namespace dicey
 
       uint32_t oldchr = 999999;
       uint32_t oldstart = 0;
-      rcfile << "\"data\":[";      
+      bool firstData = true;
+      rcfile << "\"data\":[";
       for(uint32_t i = 0; i < ht.size(); ++i) {
 	if ((oldchr != ht[i].chr) || (oldstart != ht[i].start)) {
-	  if (i>0) rcfile << ',';
+	  if (!firstData) rcfile << ',';
+	  firstData = false;
 	  nlohmann::json j;
 	  j["distance"] = std::abs(ht[i].score);
 	  j["chr"] = qn[ht[i].chr];
@@ -311,7 +313,7 @@ namespace dicey
 	    int64_t bestPos = locations[i];
 	    int64_t cumsum = 0;
 	    uint32_t refIndex = 0;
-	    for(; bestPos >= cumsum + seqlen[refIndex]; ++refIndex) cumsum += seqlen[refIndex];
+	    for(; (refIndex + 1 < seqlen.size()) && (bestPos >= cumsum + seqlen[refIndex]); ++refIndex) cumsum += seqlen[refIndex];
 	    uint32_t chrpos = bestPos - cumsum;
 	    std::size_t pre_extract = c.pre_context;
 	    std::size_t post_extract = c.post_context;

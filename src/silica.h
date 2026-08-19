@@ -172,10 +172,11 @@ namespace dicey
 	j["RevSeq"] = pSeq[pcrColl[i].revId];
 	int32_t sl = -1;
 	char* seq = faidx_fetch_seq(fai, qn[pcrColl[i].refIndex].c_str(), pcrColl[i].forPos, pcrColl[i].revPos + pSeq[pcrColl[i].revId].size() - 1, &sl);
-	std::string seqstr = boost::to_upper_copy(std::string(seq));
+	std::string seqstr;
+	if ((seq != NULL) && (sl >= 0)) seqstr = boost::to_upper_copy(std::string(seq));
 	j["Seq"] = seqstr;
 	rcfile << j.dump();
-	free(seq);
+	if (seq != NULL) free(seq);
       }
       rcfile << "]}";
 
@@ -474,7 +475,7 @@ namespace dicey
 	      int64_t bestPos = locations[i];
 	      int64_t cumsum = 0;
 	      uint32_t refIndex = 0;
-	      for(; bestPos >= cumsum + seqlen[refIndex]; ++refIndex) cumsum += seqlen[refIndex];
+	      for(; (refIndex + 1 < seqlen.size()) && (bestPos >= cumsum + seqlen[refIndex]); ++refIndex) cumsum += seqlen[refIndex];
 	      uint32_t chrpos = bestPos - cumsum;	      		      
 	      std::size_t pre_extract = c.pre_context;
 	      std::size_t post_extract = c.post_context;
@@ -589,8 +590,24 @@ namespace dicey
     if (c.pruneprimer) jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
     else {
       for(uint32_t refIndex = 0; refIndex < nseq; ++refIndex) {
+	std::vector<std::pair<uint32_t, uint32_t> > rvByPos;
+	rvByPos.reserve(revBind[refIndex].size());
+	for(uint32_t k = 0; k < revBind[refIndex].size(); ++k) rvByPos.push_back(std::make_pair(revBind[refIndex][k].pos, k));
+	std::sort(rvByPos.begin(), rvByPos.end());
+	std::vector<uint32_t> rvPos(rvByPos.size());
+	for(uint32_t k = 0; k < rvByPos.size(); ++k) rvPos[k] = rvByPos[k].first;
+	std::vector<uint32_t> cand;
 	for(TPrimerBinds::iterator fw = forBind[refIndex].begin(); fw != forBind[refIndex].end(); ++fw) {
-	  for(TPrimerBinds::iterator rv = revBind[refIndex].begin(); rv != revBind[refIndex].end(); ++rv) {
+	  std::vector<uint32_t>::iterator loIt = std::upper_bound(rvPos.begin(), rvPos.end(), fw->pos);
+	  std::vector<uint32_t>::iterator hiIt;
+	  uint64_t hiBound = (uint64_t) fw->pos + (uint64_t) c.maxProdSize;
+	  if (hiBound >= ((uint64_t) 1 << 32)) hiIt = rvPos.end();
+	  else hiIt = std::upper_bound(rvPos.begin(), rvPos.end(), (uint32_t) hiBound);
+	  cand.clear();
+	  for(std::vector<uint32_t>::iterator pit = loIt; pit != hiIt; ++pit) cand.push_back(rvByPos[pit - rvPos.begin()].second);
+	  std::sort(cand.begin(), cand.end());
+	  for(std::vector<uint32_t>::iterator cit = cand.begin(); cit != cand.end(); ++cit) {
+	    TPrimerBinds::iterator rv = revBind[refIndex].begin() + (*cit);
 	    if ((rv->pos > fw->pos) && (rv->pos + pSeq[rv->primerId].size() - fw->pos <= c.maxProdSize)) {
 	      PcrProduct pcrProd;
 	      pcrProd.refIndex = refIndex;
@@ -601,7 +618,7 @@ namespace dicey
 	      pcrProd.revTemp = rv->temp;
 	      pcrProd.revId = rv->primerId;
 	      pcrProd.leng = (rv->pos + pSeq[pcrProd.revId].size()) - fw->pos;
-	      
+
 	      // Calculate Penalty
 	      double pen = (fw->perfTemp - fw->temp) * c.penDiff;
 	      if (pen < 0) pen = 0;
