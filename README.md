@@ -2,7 +2,7 @@
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dicey/badges/downloads.svg)](https://anaconda.org/bioconda/dicey)
 [![C/C++ CI](https://github.com/gear-genomics/dicey/workflows/C/C++%20CI/badge.svg)](https://github.com/gear-genomics/dicey/actions)
 [![Docker CI](https://github.com/gear-genomics/dicey/workflows/Docker%20CI/badge.svg)](https://hub.docker.com/r/geargenomics/dicey/)
-[![GitHub license](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/gear-genomics/dicey/blob/master/LICENSE)
+[![GitHub license](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/gear-genomics/dicey/blob/main/LICENSE)
 [![GitHub Releases](https://img.shields.io/github/release/gear-genomics/dicey.svg)](https://github.com/gear-genomics/dicey/releases)
 
 ## Installing dicey
@@ -87,12 +87,10 @@ The `json2txt.py` python script is included in the repository. Just clone the re
 
 Dicey is part of the [GEAR genomics framework](https://www.gear-genomics.com) which is described in the below publication.
 
-Rausch, T., Fritz, M.H., Untergasser, A. and Benes, V.         
-Tracy: basecalling, alignment, assembly and deconvolution of sanger chromatogram trace files.             
-BMC Genomics 21, 230 (2020).             
-[https://doi.org/10.1186/s12864-020-6635-8](https://doi.org/10.1186/s12864-020-6635-8)
-
+Andreas Untergasser, Markus Hsi-Yang Fritz, Vladimir Benes, Tobias Rausch           
+GEAR Genomics: a user-friendly, open-source web platform enabling interactive genomic analysis for molecular biologists                   
+Nucleic Acids Res. 2026 Jul 11;54(W1):W184-W187. doi: [10.1093/nar/gkag445](https://doi.org/10.1093/nar/gkag445)
 
 ## License
 
-Dicey is distributed under the GPL license. Consult the accompanying [LICENSE](https://github.com/gear-genomics/dicey/blob/master/LICENSE) file for more details.
+Dicey is distributed under the GPL license. Consult the accompanying [LICENSE](https://github.com/gear-genomics/dicey/blob/main/LICENSE) file for more details.
