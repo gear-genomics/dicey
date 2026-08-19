@@ -347,7 +347,7 @@ namespace dicey
     }
     
     // Parse input fasta
-    if (!(boost::filesystem::exists(c.infile) && boost::filesystem::is_regular_file(c.infile) && boost::filesystem::file_size(c.infile))) {
+    if ((!boost::filesystem::exists(c.infile)) || (boost::filesystem::is_directory(c.infile))) {
       msg.push_back("Error: Input fasta file is missing!");
       jsonPrimerOut(c, seqname, allp, pcrColl, pName, pSeq, msg);
       return 1;

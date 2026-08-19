@@ -42,6 +42,10 @@ You can also redirect the output in JSON format to a file.
 
 `dicey hunt -g hg19.fa.gz -o out.json.gz TCTCTGCACACACGTTGT`
 
+Instead of a single sequence you can also provide a FASTA file.
+
+`dicey hunt -g hg19.fa.gz seq.fasta | python scripts/json2txt.py`
+
 Pre-built genome indices for commonly used reference genomes are available for [download here](https://gear-genomics.embl.de/data/tracy/).
 
 

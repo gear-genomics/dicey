@@ -44,6 +44,7 @@ namespace dicey
     std::size_t post_context;
     std::size_t max_locations;
     std::string sequence;
+    std::string qname;
     boost::filesystem::path genome;
     boost::filesystem::path outfile;
   };
@@ -123,6 +124,7 @@ namespace dicey
       meta["subcommand"] = "hunt";
       meta["distance"] = c.distance;
       meta["sequence"] = c.sequence;
+      if (!c.qname.empty()) meta["name"] = c.qname;
       meta["genome"] = c.genome.string();
       meta["outfile"] = c.outfile.string();
       meta["maxmatches"] = c.max_locations;
@@ -164,7 +166,7 @@ namespace dicey
       // Output file
       boost::iostreams::filtering_ostream rcfile;
       rcfile.push(boost::iostreams::gzip_compressor());
-      rcfile.push(boost::iostreams::file_sink(c.outfile.string(), std::ios_base::out | std::ios_base::binary));
+      rcfile.push(boost::iostreams::file_sink(c.outfile.string(), std::ios_base::app | std::ios_base::binary));
       writeJsonDnaHitOut(c, rcfile, qn, ht, msg);
       rcfile.pop();
     } else {
@@ -207,6 +209,7 @@ namespace dicey
     // Check command line arguments
     if ((vm.count("help")) || (!vm.count("input-file")) || (!vm.count("genome"))) {
       std::cout << "Usage: dicey " << argv[0] << " [OPTIONS] -g Danio_rerio.fa.gz CATTACTAACATCAGT" << std::endl;
+      std::cout << "       dicey " << argv[0] << " [OPTIONS] -g Danio_rerio.fa.gz sequences.fasta" << std::endl;
       std::cout << visible_options << "\n";
       return -1;
     }
@@ -225,40 +228,19 @@ namespace dicey
     if (vm.count("outfile")) c.hasOutfile = true;
     else c.hasOutfile = false;
 
-    // Check sequence length
-    if (c.sequence.size() < 10) {
-      msg.push_back("Error: Input sequence is shorter than 10 nucleotides!");
-      jsonDnaHitOut(c, seqname, ht, msg);
-      return 1;
+    // Truncate the output file
+    if (c.hasOutfile) {
+      std::ofstream trunc(c.outfile.string().c_str(), std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
+      trunc.close();
     }
 
-    // Upper case
-    c.sequence = boost::to_upper_copy(c.sequence);
-    c.sequence = replaceNonDna(c.sequence, msg);
-    std::string revSequence = c.sequence;
-    reverseComplement(revSequence);
-    
-    // Check distance
-    if (c.distance >= c.sequence.size()) {
-      c.distance = c.sequence.size() - 1;
-      msg.push_back("Warning: Distance was adjusted to sequence length!");
-    }
-
-    // Set prefix and suffix based on edit distance
-    c.pre_context = 0;
-    c.post_context = 0;
-    if (c.indel) {
-      c.pre_context += c.distance;
-      c.post_context += c.distance;
-    }
-    
     // Check genome
     if (!(boost::filesystem::exists(c.genome) && boost::filesystem::is_regular_file(c.genome) && boost::filesystem::file_size(c.genome))) {
       msg.push_back("Error: Genome does not exist!");
       jsonDnaHitOut(c, seqname, ht, msg);
       return 1;
     }
-    
+
     // Parse chromosome lengths
     uint32_t nseq = getSeqLenName(c, seqlen, seqname);
     if (!nseq) {
@@ -268,7 +250,7 @@ namespace dicey
     }
 
     // Reference index
-    csa_wt<> fm_index;  
+    csa_wt<> fm_index;
     boost::filesystem::path op = c.genome.parent_path() / c.genome.stem();
     std::string index_file = op.string() + ".fm9";
     if (!load_from_checked_file(fm_index, index_file)) {
@@ -277,126 +259,190 @@ namespace dicey
       return 1;
     }
 
-    // Define alphabet
-    typedef std::set<char> TAlphabet;
-    char tmp[] = {'A', 'C', 'G', 'T'};
-    TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
-
-    // Generate neighbors
-    typedef std::set<std::string> TStringSet;
-    typedef std::vector<TStringSet> TFwdRevSearchSets;
-    TFwdRevSearchSets fwrv(2, TStringSet());
-    neighbors(c.sequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[0]);
-    // Debug
-    //for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
-
-    // Reverse complement set?
-    if (c.reverse) neighbors(revSequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[1]);
-
-    // Check neighborhood size
-    if ((fwrv[0].size() >= c.maxNeighborhood) || (fwrv[1].size() >= c.maxNeighborhood)) {
-      std::string m = "Warning: Neighborhood size exceeds " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " candidates. Only first " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " neighbors are searched, results are likely incomplete!";
-      msg.push_back(m);
+    // Input sequence
+    std::vector<std::pair<std::string, std::string> > queries;
+    boost::filesystem::path inpath(c.sequence);
+    if (boost::filesystem::exists(inpath) && boost::filesystem::is_regular_file(inpath)) {
+      if (!is_fasta(inpath)) {
+	msg.push_back("Error: Input file is not in FASTA format!");
+	jsonDnaHitOut(c, seqname, ht, msg);
+	return 1;
+      }
+      std::ifstream fafile(c.sequence.c_str());
+      std::string line;
+      std::string fan;
+      std::string faseq;
+      while(std::getline(fafile, line)) {
+	if (line.empty()) continue;
+	if (line[0] == '>') {
+	  if ((!fan.empty()) && (!faseq.empty())) queries.push_back(std::make_pair(fan, faseq));
+	  faseq = "";
+	  fan = line.substr(1);
+	} else faseq += line;
+      }
+      if ((!fan.empty()) && (!faseq.empty())) queries.push_back(std::make_pair(fan, faseq));
+    } else {
+      // DNA sequence
+      queries.push_back(std::make_pair(std::string(), c.sequence));
     }
-    
-    // Search
-    uint32_t hits = 0;
-    for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
-      for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
-	std::string query = *it;
-	std::size_t m = query.size();
-	std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
-	if (occs > 0) {
-	  auto locations = locate(fm_index, query.begin(), query.begin() + m);
-	  std::sort(locations.begin(), locations.end());
-	  for(std::size_t i = 0; ((i < std::min(occs, c.max_locations)) && (hits < c.max_locations)); ++i) {
-	    int64_t bestPos = locations[i];
-	    int64_t cumsum = 0;
-	    uint32_t refIndex = 0;
-	    for(; (refIndex + 1 < seqlen.size()) && (bestPos >= cumsum + seqlen[refIndex]); ++refIndex) cumsum += seqlen[refIndex];
-	    uint32_t chrpos = bestPos - cumsum;
-	    std::size_t pre_extract = c.pre_context;
-	    std::size_t post_extract = c.post_context;
-	    if (pre_extract > locations[i]) {
-	      pre_extract = locations[i];
-	    }
-	    if (locations[i]+m+post_extract > fm_index.size()) {
-	      post_extract = fm_index.size() - locations[i] - m;
-	    }
-	    auto s = extract(fm_index, locations[i] - pre_extract, locations[i] + m + post_extract - 1);
-	    std::string pre = s.substr(0, pre_extract);
-	    s = s.substr(pre_extract);
-	    if (pre.find_last_of('\n') != std::string::npos) {
-	      pre = pre.substr(pre.find_last_of('\n')+1);
-	    }
-	    std::string post = s.substr(m);
-	    post = post.substr(0, post.find_first_of('\n'));
-	    
-	    // Genomic sequence
-	    std::string genomicseq = pre + s.substr(0, m) + post;
-	    if (pre.size() < chrpos) chrpos -= pre.size();
-	    DnaScore<int32_t> sc(0, -1, -1, -1);
-	    typedef boost::multi_array<char, 2> TAlign;
-	    AlignConfig<false, true> global;
-	    if (fwrvidx == 0) {
-	      if (c.indel) {
-		TAlign align;
-		int32_t score = needle(genomicseq, c.sequence , align, global, sc);
-		std::string refalign = "";
-		std::string queryalign = "";
-		bool leadGap = true;
-		for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
-		  if (align[1][j] != '-') leadGap = false;
-		  if (!leadGap) {
-		    refalign += align[0][j];
-		    queryalign += align[1][j];
-		  } else {
-		    ++chrpos;
-		  }
-		}
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', refalign, queryalign));
-	      } else {
-		int32_t score = needleScore(genomicseq, c.sequence, sc);
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', genomicseq, c.sequence));
+
+    // Search each query sequence
+    uint32_t origDistance = c.distance;
+    for(uint32_t qi = 0; qi < queries.size(); ++qi) {
+      c.qname = queries[qi].first;
+      c.sequence = queries[qi].second;
+      c.distance = origDistance;
+      std::vector<DnaHit> ht;
+      std::vector<std::string> msg;
+      
+      // Check sequence length
+      if (c.sequence.size() < 10) {
+	msg.push_back("Error: Input sequence is shorter than 10 nucleotides!");
+	jsonDnaHitOut(c, seqname, ht, msg);
+	continue;
+      }
+      
+      // Upper case
+      c.sequence = boost::to_upper_copy(c.sequence);
+      c.sequence = replaceNonDna(c.sequence, msg);
+      std::string revSequence = c.sequence;
+      reverseComplement(revSequence);
+      
+      // Check distance
+      if (c.distance >= c.sequence.size()) {
+	c.distance = c.sequence.size() - 1;
+	msg.push_back("Warning: Distance was adjusted to sequence length!");
+      }
+      
+      // Set prefix and suffix based on edit distance
+      c.pre_context = 0;
+      c.post_context = 0;
+      if (c.indel) {
+	c.pre_context += c.distance;
+	c.post_context += c.distance;
+      }
+      
+      // Define alphabet
+      typedef std::set<char> TAlphabet;
+      char tmp[] = {'A', 'C', 'G', 'T'};
+      TAlphabet alphabet(tmp, tmp + sizeof(tmp) / sizeof(tmp[0]));
+      
+      // Generate neighbors
+      typedef std::set<std::string> TStringSet;
+      typedef std::vector<TStringSet> TFwdRevSearchSets;
+      TFwdRevSearchSets fwrv(2, TStringSet());
+      neighbors(c.sequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[0]);
+      // Debug
+      //for(TStringSet::iterator it = fwrv[0].begin(); it != fwrv[0].end(); ++it) std::cerr << *it << std::endl;
+      
+      // Reverse complement set?
+      if (c.reverse) neighbors(revSequence, alphabet, c.distance, c.indel, c.maxNeighborhood, fwrv[1]);
+      
+      // Check neighborhood size
+      if ((fwrv[0].size() >= c.maxNeighborhood) || (fwrv[1].size() >= c.maxNeighborhood)) {
+	std::string m = "Warning: Neighborhood size exceeds " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " candidates. Only first " + boost::lexical_cast<std::string>(c.maxNeighborhood) + " neighbors are searched, results are likely incomplete!";
+	msg.push_back(m);
+      }
+      
+      // Search
+      uint32_t hits = 0;
+      for(uint32_t fwrvidx = 0; fwrvidx < fwrv.size(); ++fwrvidx) {
+	for(typename TStringSet::const_iterator it = fwrv[fwrvidx].begin(); ((it != fwrv[fwrvidx].end()) && (hits < c.max_locations)); ++it) {
+	  std::string query = *it;
+	  std::size_t m = query.size();
+	  std::size_t occs = sdsl::count(fm_index, query.begin(), query.end());
+	  if (occs > 0) {
+	    auto locations = locate(fm_index, query.begin(), query.begin() + m);
+	    std::sort(locations.begin(), locations.end());
+	    for(std::size_t i = 0; ((i < std::min(occs, c.max_locations)) && (hits < c.max_locations)); ++i) {
+	      int64_t bestPos = locations[i];
+	      int64_t cumsum = 0;
+	      uint32_t refIndex = 0;
+	      for(; (refIndex + 1 < seqlen.size()) && (bestPos >= cumsum + seqlen[refIndex]); ++refIndex) cumsum += seqlen[refIndex];
+	      uint32_t chrpos = bestPos - cumsum;
+	      std::size_t pre_extract = c.pre_context;
+	      std::size_t post_extract = c.post_context;
+	      if (pre_extract > locations[i]) {
+		pre_extract = locations[i];
 	      }
-	    } else {
-	      if (c.indel) {
-		TAlign align;
-		int32_t score = needle(genomicseq, revSequence, align, global, sc);
-		std::string refalign = "";
-		std::string queryalign = "";
-		bool leadGap = true;
-		for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
-		  if (align[1][j] != '-') leadGap = false;
-		  if (!leadGap) {
-		    refalign += align[0][j];
-		    queryalign += align[1][j];
-		  } else {
-		    ++chrpos;
-		  }
-		}
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', refalign, queryalign));
-	      } else {
-		int32_t score = needleScore(genomicseq, revSequence, sc);
-		ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', genomicseq, revSequence));
+	      if (locations[i]+m+post_extract > fm_index.size()) {
+		post_extract = fm_index.size() - locations[i] - m;
 	      }
+	      auto s = extract(fm_index, locations[i] - pre_extract, locations[i] + m + post_extract - 1);
+	      std::string pre = s.substr(0, pre_extract);
+	      s = s.substr(pre_extract);
+	      if (pre.find_last_of('\n') != std::string::npos) {
+		pre = pre.substr(pre.find_last_of('\n')+1);
+	      }
+	      std::string post = s.substr(m);
+	      post = post.substr(0, post.find_first_of('\n'));
+	      
+	      // Genomic sequence
+	      std::string genomicseq = pre + s.substr(0, m) + post;
+	      if (pre.size() < chrpos) chrpos -= pre.size();
+	      DnaScore<int32_t> sc(0, -1, -1, -1);
+	      typedef boost::multi_array<char, 2> TAlign;
+	      AlignConfig<false, true> global;
+	      if (fwrvidx == 0) {
+		if (c.indel) {
+		  TAlign align;
+		  int32_t score = needle(genomicseq, c.sequence , align, global, sc);
+		  std::string refalign = "";
+		  std::string queryalign = "";
+		  bool leadGap = true;
+		  for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
+		    if (align[1][j] != '-') leadGap = false;
+		    if (!leadGap) {
+		      refalign += align[0][j];
+		      queryalign += align[1][j];
+		    } else {
+		      ++chrpos;
+		    }
+		  }
+		  ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', refalign, queryalign));
+		} else {
+		  int32_t score = needleScore(genomicseq, c.sequence, sc);
+		  ht.push_back(DnaHit(score, refIndex, chrpos+1, '+', genomicseq, c.sequence));
+		}
+	      } else {
+		if (c.indel) {
+		  TAlign align;
+		  int32_t score = needle(genomicseq, revSequence, align, global, sc);
+		  std::string refalign = "";
+		  std::string queryalign = "";
+		  bool leadGap = true;
+		  for(uint32_t j = 0; (j < (align.shape()[1] - _trailGap(align))); ++j) {
+		    if (align[1][j] != '-') leadGap = false;
+		    if (!leadGap) {
+		      refalign += align[0][j];
+		      queryalign += align[1][j];
+		    } else {
+		      ++chrpos;
+		    }
+		  }
+		  ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', refalign, queryalign));
+		} else {
+		  int32_t score = needleScore(genomicseq, revSequence, sc);
+		  ht.push_back(DnaHit(score, refIndex, chrpos+1, '-', genomicseq, revSequence));
+		}
+	      }
+	      ++hits;
 	    }
-	    ++hits;
 	  }
 	}
       }
-    }
-    if (hits >= c.max_locations) {
-      std::string m = "Warning: More than " + boost::lexical_cast<std::string>(c.max_locations) + " matches found. Only first " + boost::lexical_cast<std::string>(c.max_locations) + " matches are reported, results are likely incomplete!";
-      msg.push_back(m);
-    }
+      if (hits >= c.max_locations) {
+	std::string m = "Warning: More than " + boost::lexical_cast<std::string>(c.max_locations) + " matches found. Only first " + boost::lexical_cast<std::string>(c.max_locations) + " matches are reported, results are likely incomplete!";
+	msg.push_back(m);
+      }
     
-    // Sort
-    std::sort(ht.begin(), ht.end());
+      // Sort
+      std::sort(ht.begin(), ht.end());
+      
+      // Output
+      jsonDnaHitOut(c, seqname, ht, msg);
+    }
 
-    // Output
-    jsonDnaHitOut(c, seqname, ht, msg);
-    
     return 0;
   }
 
