@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from __future__ import print_function
 import argparse
@@ -15,33 +15,31 @@ primerKeys = ["Name", "Tm", "Chrom", "Pos", "End", "Ori", "MatchTm", "Seq", "Gen
 ampliconKeys = ["Id", "Length", "Penalty", "Chrom", "ForPos", "ForEnd", "ForTm", "ForName", "ForSeq", "Chrom", "RevPos", "RevEnd", "RevTm", "RevName", "RevSeq", "Seq"]
 
 if args.json:
-    with gzip.open(args.json, 'r') as f:
+    with gzip.open(args.json, 'rt') as f:
         df = json.load(f)
-        if "errors" in df.keys():
+        if "errors" in df:
             for err in df['errors']:
-                print(err['title'])
-        if "meta" in df.keys():
-            if df['meta']['subcommand'] == "search":
-                if "data" in df.keys():
-                    if args.mode == "primer":
-                        print("Primer", end="")
-                        for k in primerKeys:
-                            print("\t", k, sep="", end="")
-                        print()
-                        if "primers" in df['data'].keys():
-                            for hit in df['data']['primers']:
-                                print("Primer", end="")
-                                for k in primerKeys:
-                                    print("\t", hit[k], sep="", end="")
-                                print()
-                    else:
-                        print("Amplicon", end="")
-                        for k in ampliconKeys:
-                            print("\t", k, sep="", end="")
-                        print()
-                        if "amplicons" in df['data'].keys():
-                            for hit in df['data']['amplicons']:
-                                print("Amplicon", end="")
-                                for k in ampliconKeys:
-                                    print("\t", hit[k], sep="", end="")
-                                print()
+                print(err.get('title', ''))
+        meta = df.get('meta')
+        if meta and meta.get('subcommand') == "search":
+            data = df.get('data', {})
+            if args.mode == "primer":
+                print("Primer", end="")
+                for k in primerKeys:
+                    print("\t", k, sep="", end="")
+                print()
+                for hit in data.get('primers', []):
+                    print("Primer", end="")
+                    for k in primerKeys:
+                        print("\t", hit.get(k, ""), sep="", end="")
+                    print()
+            else:
+                print("Amplicon", end="")
+                for k in ampliconKeys:
+                    print("\t", k, sep="", end="")
+                print()
+                for hit in data.get('amplicons', []):
+                    print("Amplicon", end="")
+                    for k in ampliconKeys:
+                        print("\t", hit.get(k, ""), sep="", end="")
+                    print()
